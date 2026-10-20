@@ -12,8 +12,12 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.test.core.app.ApplicationProvider
 import com.github.se.pooltrack.model.clearPreferencesDataStore
+import com.github.se.pooltrack.model.productionPreferencesDataStore
 import com.github.se.pooltrack.model.subscription.PassZoomRepository
 import com.github.se.pooltrack.model.subscription.PassZoomRepositoryLocal
 import com.github.se.pooltrack.model.subscription.PdfFiles
@@ -112,11 +116,18 @@ class DeviceStorageFlowTest : EndToEndTest() {
     click(SubscriptionScreenTestTags.EXPIRATION_CONFIRM_BUTTON)
   }
 
+  /** The device storage answers on its own thread, so a new pass takes a moment to be added. */
+  private fun awaitSubscriptions(count: Int) {
+    composeRule.waitUntil(timeoutMillis = 5_000) { store.ids("subscriptions").size == count }
+    composeRule.waitForIdle()
+  }
+
   @Test
   fun aPickedPdf_namesTheSubscriptionAfterItsFile_andIsRememberedOnTheDevice() {
     launchApp()
 
     addPdf("season.pdf")
+    awaitSubscriptions(1)
 
     composeRule.onNodeWithText("Season 2026.pdf").assertIsDisplayed()
     val stored = store.ids("subscriptions").single()
@@ -131,8 +142,7 @@ class DeviceStorageFlowTest : EndToEndTest() {
     launchApp()
     listOf("anonymous.pdf", "columnless.pdf", "empty.pdf", "unknown.pdf").forEach { addPdf(it) }
 
-    // The device storage answers on its own thread, so the last pass takes a moment to be added.
-    composeRule.waitUntil(timeoutMillis = 5_000) { store.ids("subscriptions").size == 4 }
+    awaitSubscriptions(4)
     val names =
         store.ids("subscriptions").map { store.document("subscriptions", it)!!["displayName"] }
     assertEquals(List(4) { "Subscription" }, names)
@@ -180,4 +190,54 @@ class DeviceStorageFlowTest : EndToEndTest() {
     assertNotNull(saved)
     assertTrue("zoom ${saved?.scale} did not build on the restored 2x", saved!!.scale > 2f)
   }
+
+  // ---------- a damaged saved zoom ----------
+
+  /**
+   * Stores a zoom for the pass of the seeded subscription with the given raw values, then shows it.
+   */
+  private fun showPassWithSavedZoom(
+      scale: Float? = 2f,
+      offsetX: Float? = 0f,
+      offsetY: Float? = 0f,
+      forPass: String = "content://documents/sub-1.pdf",
+  ) {
+    runBlocking {
+      productionPreferencesDataStore(
+              application,
+              "com.github.se.pooltrack.model.subscription.PassZoomRepositoryLocalKt",
+              "passZoomDataStore",
+          )
+          .edit { prefs ->
+            prefs[stringPreferencesKey("pass_uri")] = forPass
+            scale?.let { prefs[floatPreferencesKey("scale")] = it }
+            offsetX?.let { prefs[floatPreferencesKey("offset_x_fraction")] = it }
+            offsetY?.let { prefs[floatPreferencesKey("offset_y_fraction")] = it }
+          }
+    }
+    seedSubscription(id = "sub-1")
+    launchApp()
+    click(HomeScreenTestTags.OPEN_SUBSCRIPTION_FAB)
+    waitForTag(SubscriptionQuickViewScreenTestTags.PDF_IMAGE)
+    tag(SubscriptionQuickViewScreenTestTags.ACCEPT_BUTTON).assertIsDisplayed()
+  }
+
+  @Test
+  fun savedZoomOfAnotherPass_isIgnored() = showPassWithSavedZoom(forPass = "content://other.pdf")
+
+  @Test fun savedZoomWithoutItsScale_isIgnored() = showPassWithSavedZoom(scale = null)
+
+  @Test fun savedZoomWithoutItsHorizontalOffset_isIgnored() = showPassWithSavedZoom(offsetX = null)
+
+  @Test fun savedZoomWithoutItsVerticalOffset_isIgnored() = showPassWithSavedZoom(offsetY = null)
+
+  @Test
+  fun savedZoomWithAScaleThatIsNotANumber_isIgnored() = showPassWithSavedZoom(scale = Float.NaN)
+
+  @Test
+  fun savedZoomWithAnInfiniteOffset_isIgnored() =
+      showPassWithSavedZoom(offsetX = Float.POSITIVE_INFINITY)
+
+  @Test
+  fun savedZoomWithAnOffsetThatIsNotANumber_isIgnored() = showPassWithSavedZoom(offsetY = Float.NaN)
 }
