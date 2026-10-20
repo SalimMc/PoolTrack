@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.core.app.ActivityOptionsCompat
+import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import com.github.se.pooltrack.PoolTrackApp
@@ -29,12 +30,16 @@ import com.github.se.pooltrack.model.auth.AuthRepositoryProvider
 import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.entry.EntryRepositoryFirestore
 import com.github.se.pooltrack.model.entry.EntryRepositoryProvider
+import com.github.se.pooltrack.model.store.DocumentStore
+import com.github.se.pooltrack.model.subscription.PassZoomRepository
 import com.github.se.pooltrack.model.subscription.PassZoomRepositoryProvider
+import com.github.se.pooltrack.model.subscription.PdfFiles
 import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryFirestore
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
 import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
 import com.github.se.pooltrack.model.subscription.toDocument
+import com.github.se.pooltrack.model.update.UpdateRepository
 import com.github.se.pooltrack.model.update.UpdateRepositoryProvider
 import com.github.se.pooltrack.ui.theme.PoolTrackTheme
 import com.github.se.pooltrack.utils.FakeAuthRepository
@@ -139,13 +144,24 @@ abstract class EndToEndTest {
             }
       }
 
+  // What the app is given for each outside dependency; tests override these to put a more
+  // realistic fake further out, e.g. a fake HTTP server under the real updater.
+  protected open fun storeForApp(): DocumentStore = store
+
+  protected open fun pdfFilesForApp(): PdfFiles = pdfFiles
+
+  protected open fun passZoomForApp(): PassZoomRepository = FakePassZoomRepository()
+
+  protected open fun updatesForApp(): UpdateRepository = updates
+
   /** Wires the providers to the fakes, like `MainActivity` does at startup. */
   protected fun wireProviders() {
     AuthRepositoryProvider.repository = auth
-    EntryRepositoryProvider.repository = EntryRepositoryFirestore(store)
-    SubscriptionRepositoryProvider.repository = SubscriptionRepositoryFirestore(store, pdfFiles)
-    PassZoomRepositoryProvider.repository = FakePassZoomRepository()
-    UpdateRepositoryProvider.repository = updates
+    EntryRepositoryProvider.repository = EntryRepositoryFirestore(storeForApp())
+    SubscriptionRepositoryProvider.repository =
+        SubscriptionRepositoryFirestore(storeForApp(), pdfFilesForApp())
+    PassZoomRepositoryProvider.repository = passZoomForApp()
+    UpdateRepositoryProvider.repository = updatesForApp()
   }
 
   /** Shows the whole app. */
@@ -224,10 +240,10 @@ abstract class EndToEndTest {
             maxEntries = maxEntries,
             price = price,
         )
-    val repository = SubscriptionRepositoryFirestore(store, pdfFiles)
+    val repository = SubscriptionRepositoryFirestore(store, pdfFilesForApp())
     runBlocking {
       store.set("subscriptions", id, subscription.toDocument())
-      if (withPdf) pdfFiles.save(id, subscription.uri)
+      if (withPdf) pdfFilesForApp().save(id, subscription.uri)
       if (active) repository.setActiveSubscription(id)
     }
     return subscription
@@ -268,6 +284,17 @@ abstract class EndToEndTest {
         composeRule
             as AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>
     rule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+    composeRule.waitForIdle()
+  }
+
+  /** Sends the app to the background and back, like going to the settings and returning. */
+  protected fun backgroundAndResume() {
+    @Suppress("UNCHECKED_CAST")
+    val rule =
+        composeRule
+            as AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>
+    rule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+    rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
     composeRule.waitForIdle()
   }
 

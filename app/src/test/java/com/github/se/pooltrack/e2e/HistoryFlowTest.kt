@@ -10,8 +10,11 @@ import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
@@ -396,6 +399,163 @@ class HistoryFlowTest : EndToEndTest() {
 
     tag(EntryDetailsScreenTestTags.NOT_FOUND_MESSAGE).assertIsDisplayed()
     tag(EntryDetailsScreenTestTags.DELETE_BUTTON).assertDoesNotExist()
+  }
+
+  // ---------- naming the days picked in the calendar ----------
+
+  /** Shows the month of [day] in the expanded month calendar, then taps [day]. */
+  private fun pickDayInMonthCalendar(day: java.time.LocalDate) {
+    val months =
+        java.time.temporal.ChronoUnit.MONTHS.between(YearMonth.from(day), YearMonth.from(today))
+    repeat(months.toInt()) { click(MonthCalendarTestTags.PREVIOUS) }
+    click(MonthCalendarTestTags.day(day))
+  }
+
+  @Test
+  fun pickingADayWithoutAVisit_namesItRelativeToToday() {
+    seedEntry(daysAgo = 40)
+    launchApp()
+    openHistory()
+    expandCalendar()
+
+    pickDayInMonthCalendar(today.minusDays(1))
+    composeRule.onNodeWithText("No visit on Yesterday").assertIsDisplayed()
+
+    // Another pick replaces the message that is still on screen.
+    val earlier = today.minusDays(3)
+    pickDayInMonthCalendar(earlier)
+    val pattern = if (earlier.year == today.year) "EEEE, MMM d" else "EEEE, MMM d, yyyy"
+    val expected =
+        earlier.format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.US))
+    composeRule.onNodeWithText("No visit on $expected").assertIsDisplayed()
+  }
+
+  @Test
+  fun pickingADayOfAnotherYear_namesItWithItsYear() {
+    val visit = today.minusYears(1).withDayOfMonth(15)
+    seedEntry(daysAgo = today.toEpochDay() - visit.toEpochDay())
+    launchApp()
+    openHistory()
+    expandCalendar()
+
+    click(MonthCalendarTestTags.ZOOM_OUT)
+    click(YearCalendarTestTags.PREVIOUS)
+    click(YearCalendarTestTags.month(YearMonth.from(visit)))
+    val other = visit.withDayOfMonth(16)
+    click(MonthCalendarTestTags.day(other))
+
+    val expected =
+        other.format(
+            java.time.format.DateTimeFormatter.ofPattern("EEEE, MMM d, yyyy", java.util.Locale.US)
+        )
+    composeRule.onNodeWithText("No visit on $expected").assertIsDisplayed()
+  }
+
+  // ---------- snackbars and the list ----------
+
+  private fun addYesterdayAtNoon() {
+    click(HistoryScreenTestTags.ADD_PAST_ENTRY_BUTTON)
+    click(AddPastEntrySheetTestTags.YESTERDAY_CHIP)
+    click(AddPastEntrySheetTestTags.ADD_BUTTON)
+  }
+
+  @Test
+  fun addingAnEntry_dismissingTheSnackbar_keepsIt() {
+    launchApp()
+    openHistory()
+
+    addYesterdayAtNoon()
+    composeRule.onNodeWithText("Entry added").assertIsDisplayed()
+    composeRule.onNodeWithContentDescription("Dismiss").performClick()
+    composeRule.waitForIdle()
+
+    composeRule.onAllNodesWithText("Entry added").assertCountEquals(0)
+    assertEquals(1, storedEntries().size)
+  }
+
+  @Test
+  fun linkingAfterAdding_replacesTheAddedSnackbarWithTheLinkedOne() {
+    seedSubscription(id = "sub-1", expiresInDays = 200)
+    seedEntry(daysAgo = 3)
+    launchApp()
+    openHistory()
+
+    addYesterdayAtNoon()
+    composeRule.onNodeWithText("Entry added").assertIsDisplayed()
+    click(HistoryScreenTestTags.LINK_BUTTON)
+
+    composeRule.onNodeWithText("1 entry linked").assertIsDisplayed()
+    assertEquals(2, storedEntries().size)
+  }
+
+  @Test
+  fun addingAfterLinking_replacesTheLinkedSnackbarWithTheAddedOne() {
+    seedSubscription(id = "sub-1", expiresInDays = 200)
+    seedEntry(daysAgo = 3)
+    launchApp()
+    openHistory()
+
+    click(HistoryScreenTestTags.LINK_BUTTON)
+    composeRule.onNodeWithText("1 entry linked").assertIsDisplayed()
+    addYesterdayAtNoon()
+
+    composeRule.onNodeWithText("Entry added").assertIsDisplayed()
+    assertEquals(2, storedEntries().size)
+  }
+
+  @Test
+  fun linkingEntries_thenDismissingTheSnackbar_keepsThemLinked() {
+    seedSubscription(id = "sub-1", expiresInDays = 200)
+    seedEntry(daysAgo = 3)
+    launchApp()
+    openHistory()
+
+    click(HistoryScreenTestTags.LINK_BUTTON)
+    composeRule.onNodeWithContentDescription("Dismiss").performClick()
+    composeRule.waitForIdle()
+
+    assertEquals("sub-1", storedEntries().single().subscriptionId)
+  }
+
+  @Test
+  fun longHistory_scrollsAway_andTheAddButtonCollapsesToItsIcon() {
+    repeat(40) { seedEntry(daysAgo = (it * 3).toLong(), hour = 10) }
+    launchApp()
+    openHistory()
+    val fabLabel = hasText("Add past entry")
+    composeRule.onNode(fabLabel, useUnmergedTree = true).assertExists()
+
+    tag(HistoryScreenTestTags.ENTRY_LIST).performScrollToIndex(30)
+    composeRule.waitForIdle()
+
+    composeRule.onAllNodes(fabLabel, useUnmergedTree = true).assertCountEquals(0)
+    tag(HistoryScreenTestTags.ADD_PAST_ENTRY_BUTTON).assertIsDisplayed()
+  }
+
+  @Test
+  fun entryDetails_wordTheTimeSincePreviousSwim_andNumberTheSwims() {
+    seedEntry(daysAgo = 5, hour = 9)
+    seedEntry(daysAgo = 5, hour = 18)
+    seedEntry(daysAgo = 4, hour = 9)
+    launchApp()
+    openHistory()
+
+    // Newest first: one day after the previous, then the same day, then the first swim.
+    val items = composeRule.onAllNodesWithTag(HistoryScreenTestTags.ENTRY_ITEM)
+    items[0].performClick()
+    composeRule.waitForIdle()
+    assertShows(EntryDetailsScreenTestTags.SINCE_PREVIOUS, "1 day")
+    assertShows(EntryDetailsScreenTestTags.SWIM_NUMBER, "#3")
+    click(NavigationTestTags.GO_BACK_BUTTON)
+
+    composeRule.onAllNodesWithTag(HistoryScreenTestTags.ENTRY_ITEM)[1].performClick()
+    composeRule.waitForIdle()
+    assertShows(EntryDetailsScreenTestTags.SINCE_PREVIOUS, "Same day")
+    click(NavigationTestTags.GO_BACK_BUTTON)
+
+    composeRule.onAllNodesWithTag(HistoryScreenTestTags.ENTRY_ITEM)[2].performClick()
+    composeRule.waitForIdle()
+    assertShows(EntryDetailsScreenTestTags.SINCE_PREVIOUS, "First swim")
   }
 
   private fun textOf(tag: String): String =

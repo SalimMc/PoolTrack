@@ -1,12 +1,10 @@
 package com.github.se.pooltrack.e2e
 
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.lifecycle.Lifecycle
-import androidx.test.ext.junit.rules.ActivityScenarioRule
+import com.github.se.pooltrack.model.store.DocumentStore
+import com.github.se.pooltrack.model.store.StoredDocument
 import com.github.se.pooltrack.model.update.DownloadStatus
 import com.github.se.pooltrack.model.update.InstallResult
 import com.github.se.pooltrack.ui.account.AccountButtonTestTags
@@ -20,7 +18,10 @@ import com.github.se.pooltrack.utils.FakeAuthRepository
 import com.github.se.pooltrack.utils.FakeUpdateRepository
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -28,6 +29,21 @@ import org.junit.Test
 
 /** Signing in and out, and the mandatory update that replaces the whole app. */
 class AccessAndUpdateFlowTest : EndToEndTest() {
+
+  private var entriesGate: CompletableDeferred<Unit>? = null
+
+  /** A store whose first snapshots only arrive once [gate] is completed. */
+  private class SlowStore(
+      private val delegate: DocumentStore,
+      private val gate: CompletableDeferred<Unit>,
+  ) : DocumentStore by delegate {
+    override fun observe(collection: String): Flow<List<StoredDocument>> = flow {
+      gate.await()
+      emitAll(delegate.observe(collection))
+    }
+  }
+
+  override fun storeForApp(): DocumentStore = entriesGate?.let { SlowStore(store, it) } ?: store
 
   // ---------- sign-in gate and account ----------
 
@@ -223,23 +239,30 @@ class AccessAndUpdateFlowTest : EndToEndTest() {
   }
 
   @Test
+  fun whileTheStoredEntriesAreLoading_neitherTheUpdateNorTheAppIsShown() {
+    // On the weak signal of a pool the first snapshot of the account's data comes late. The app
+    // must not flash the update screen for a swim that may be waiting for its distance.
+    entriesGate = CompletableDeferred()
+    updates = FakeUpdateRepository(update = FakeUpdateRepository.UPDATE)
+    launchApp()
+
+    tag(UpdateRequiredScreenTestTags.SCREEN).assertDoesNotExist()
+    tag(NavigationTestTags.BOTTOM_NAVIGATION_MENU).assertDoesNotExist()
+    tag(SignInScreenTestTags.SIGN_IN_BUTTON).assertDoesNotExist()
+
+    entriesGate!!.complete(Unit)
+    composeRule.waitForIdle()
+
+    tag(UpdateRequiredScreenTestTags.SCREEN).assertIsDisplayed()
+  }
+
+  @Test
   fun offlineUpdateCheck_keepsTheAppUsable() {
     updates = FakeUpdateRepository(update = null)
     launchApp()
 
     tag(UpdateRequiredScreenTestTags.SCREEN).assertDoesNotExist()
     tag(NavigationTestTags.BOTTOM_NAVIGATION_MENU).assertIsDisplayed()
-  }
-
-  /** Sends the app to the background and back, like going to the settings and returning. */
-  private fun backgroundAndResume() {
-    @Suppress("UNCHECKED_CAST")
-    val rule =
-        composeRule
-            as AndroidComposeTestRule<ActivityScenarioRule<ComponentActivity>, ComponentActivity>
-    rule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
-    rule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-    composeRule.waitForIdle()
   }
 
   private fun textOf(tag: String): String =
