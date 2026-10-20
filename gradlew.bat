@@ -13,19 +13,49 @@
 @rem See the License for the specific language governing permissions and
 @rem limitations under the License.
 @rem
+@rem SPDX-License-Identifier: Apache-2.0
+@rem
 
-@if "%DEBUG%" == "" @echo off
+@if "%DEBUG%"=="" @echo off
 @rem ##########################################################################
 @rem
-@rem  Gradle startup script for Windows
+@rem  gradlew startup script for Windows
 @rem
 @rem ##########################################################################
 
-@rem Set local scope for the variables with windows NT shell
-if "%OS%"=="Windows_NT" setlocal
+@rem Set local scope for the variables, and ensure extensions are enabled
+setlocal EnableExtensions
+
+@rem Catch executions from older scripts and ensure they exit cleanly.
+@rem This can be removed once we can be reasonably confident that few people
+@rem will be migrating directly to this new wrapper.
+goto afterSafetyNet
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+goto exitWithErrorLevel
+:afterSafetyNet
 
 set DIRNAME=%~dp0
-if "%DIRNAME%" == "" set DIRNAME=.
+if "%DIRNAME%"=="" set DIRNAME=.
+@rem This is normally unused
 set APP_BASE_NAME=%~n0
 set APP_HOME=%DIRNAME%
 
@@ -40,15 +70,16 @@ if defined JAVA_HOME goto findJavaFromJavaHome
 
 set JAVA_EXE=java.exe
 %JAVA_EXE% -version >NUL 2>&1
-if "%ERRORLEVEL%" == "0" goto execute
+if %ERRORLEVEL% equ 0 goto execute
 
-echo.
-echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
-echo.
-echo Please set the JAVA_HOME variable in your environment to match the
-echo location of your Java installation.
+1>&2 echo.
+1>&2 echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+1>&2 echo.
+1>&2 echo Please set the JAVA_HOME variable in your environment to match the
+1>&2 echo location of your Java installation.
 
-goto fail
+"%COMSPEC%" /c exit 1
+goto exitWithErrorLevel
 
 :findJavaFromJavaHome
 set JAVA_HOME=%JAVA_HOME:"=%
@@ -56,52 +87,26 @@ set JAVA_EXE=%JAVA_HOME%/bin/java.exe
 
 if exist "%JAVA_EXE%" goto execute
 
-echo.
-echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
-echo.
-echo Please set the JAVA_HOME variable in your environment to match the
-echo location of your Java installation.
+1>&2 echo.
+1>&2 echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+1>&2 echo.
+1>&2 echo Please set the JAVA_HOME variable in your environment to match the
+1>&2 echo location of your Java installation.
 
-goto fail
+"%COMSPEC%" /c exit 1
+goto exitWithErrorLevel
 
 :execute
 @rem Setup the command line
 
-set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 
 
-@rem SwEnt bootcamp: -B1/-B2/-B3 and -staff/-public are shorthand for the -PB1 / -Pstaff /
-@rem -Ppublic test selection flags read by app/build.gradle.kts (see the comment there).
-@rem Gradle's own CLI has no such options, so they are translated here, before the
-@rem arguments reach Gradle.
-set BOOTCAMP_ARGS=
-:bootcampArgs
-if "%~1"=="" goto bootcampArgsDone
-set "BOOTCAMP_ARG=%~1"
-if "%BOOTCAMP_ARG%"=="-B1" set "BOOTCAMP_ARG=-PB1"
-if "%BOOTCAMP_ARG%"=="-B2" set "BOOTCAMP_ARG=-PB2"
-if "%BOOTCAMP_ARG%"=="-B3" set "BOOTCAMP_ARG=-PB3"
-if "%BOOTCAMP_ARG%"=="-staff" set "BOOTCAMP_ARG=-Pstaff"
-if "%BOOTCAMP_ARG%"=="-public" set "BOOTCAMP_ARG=-Ppublic"
-set BOOTCAMP_ARGS=%BOOTCAMP_ARGS% "%BOOTCAMP_ARG%"
-shift
-goto bootcampArgs
-:bootcampArgsDone
+@rem Execute gradlew
+@rem endlocal doesn't take effect until after the line is parsed and variables are expanded
+@rem which allows us to clear the local environment before executing the java command
+endlocal & "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %* & call :exitWithErrorLevel & goto exitWithErrorLevel
 
-@rem Execute Gradle
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %BOOTCAMP_ARGS%
-
-:end
-@rem End local scope for the variables with windows NT shell
-if "%ERRORLEVEL%"=="0" goto mainEnd
-
-:fail
-rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
-rem the _cmd.exe /c_ return code!
-if  not "" == "%GRADLE_EXIT_CONSOLE%" exit 1
-exit /b 1
-
-:mainEnd
-if "%OS%"=="Windows_NT" endlocal
-
-:omega
+@rem This label must not be changed. We rely on old scripts being able to jump to this point.
+:exitWithErrorLevel
+@rem Use "%COMSPEC%" /c exit to allow operators to work properly in scripts
+"%COMSPEC%" /c exit %ERRORLEVEL%
