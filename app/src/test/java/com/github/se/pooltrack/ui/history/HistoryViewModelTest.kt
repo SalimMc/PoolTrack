@@ -1,10 +1,8 @@
 package com.github.se.pooltrack.ui.history
 
 import com.github.se.pooltrack.model.entry.Entry
-import com.github.se.pooltrack.model.hint.Hint
 import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.utils.FakeEntryRepository
-import com.github.se.pooltrack.utils.FakeHintRepository
 import com.github.se.pooltrack.utils.FakeSubscriptionRepository
 import com.github.se.pooltrack.utils.MainDispatcherRule
 import java.time.Instant
@@ -23,8 +21,7 @@ class HistoryViewModelTest {
 
   @Test
   fun entries_isEmpty_whenNoEntriesRecorded() {
-    val viewModel =
-        HistoryViewModel(FakeEntryRepository(), FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(FakeEntryRepository(), FakeSubscriptionRepository())
 
     assertEquals(emptyList<Entry>(), viewModel.entries.value)
   }
@@ -35,7 +32,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             FakeEntryRepository(listOf(older, newer)),
             FakeSubscriptionRepository(),
-            FakeHintRepository(),
         )
 
     assertEquals(listOf(newer, older), viewModel.entries.value)
@@ -44,7 +40,7 @@ class HistoryViewModelTest {
   @Test
   fun entries_updates_whenRepositoryRecordsAnEntry() = runTest {
     val repository = FakeEntryRepository(listOf(older))
-    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository())
 
     repository.addEntry(newer)
 
@@ -54,24 +50,12 @@ class HistoryViewModelTest {
   @Test
   fun onDeleteEntry_removesOnlyThatEntry() {
     val repository = FakeEntryRepository(listOf(older, newer))
-    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository())
 
     viewModel.onDeleteEntry(newer)
 
     assertEquals(listOf(older), repository.storedEntries)
     assertEquals(listOf(older), viewModel.entries.value)
-  }
-
-  @Test
-  fun onRestoreEntry_putsBackADeletedEntryWithAllItsData() {
-    val detailed = newer.copy(swimDistanceMeters = 1200, swimDurationMillis = 3_000_000L)
-    val repository = FakeEntryRepository(listOf(older, detailed))
-    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository(), FakeHintRepository())
-    viewModel.onDeleteEntry(detailed)
-
-    viewModel.onRestoreEntry(detailed)
-
-    assertEquals(listOf(older, detailed), repository.storedEntries)
   }
 
   private val now = Instant.parse("2026-10-06T12:00:00Z")
@@ -89,7 +73,7 @@ class HistoryViewModelTest {
   @Test
   fun onAddPastEntry_recordsTheEntry_andReportsItAsAdded() {
     val repository = FakeEntryRepository()
-    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository())
 
     viewModel.onAddPastEntry(past, now)
 
@@ -107,7 +91,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             repository,
             FakeSubscriptionRepository(listOf(expired, valid)),
-            FakeHintRepository(),
         )
 
     viewModel.onAddPastEntry(past, now)
@@ -123,7 +106,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             repository,
             FakeSubscriptionRepository(listOf(expired)),
-            FakeHintRepository(),
         )
 
     viewModel.onAddPastEntry(past, now)
@@ -134,7 +116,7 @@ class HistoryViewModelTest {
   @Test
   fun onAddPastEntry_refusesAFutureTime_andRecordsNothing() {
     val repository = FakeEntryRepository()
-    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository())
 
     viewModel.onAddPastEntry(now.plusSeconds(60), now)
 
@@ -149,7 +131,7 @@ class HistoryViewModelTest {
   fun onAddPastEntry_refusesADuplicateTimestamp() {
     val existing = Entry(timestampEpochMilli = past.toEpochMilli(), subscriptionId = "pass")
     val repository = FakeEntryRepository(listOf(existing))
-    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(repository, FakeSubscriptionRepository())
 
     viewModel.onAddPastEntry(past, now)
 
@@ -162,8 +144,7 @@ class HistoryViewModelTest {
 
   @Test
   fun onAddPastEntryResultHandled_clearsTheResult() {
-    val viewModel =
-        HistoryViewModel(FakeEntryRepository(), FakeSubscriptionRepository(), FakeHintRepository())
+    val viewModel = HistoryViewModel(FakeEntryRepository(), FakeSubscriptionRepository())
     viewModel.onAddPastEntry(past, now)
 
     viewModel.onAddPastEntryResultHandled()
@@ -188,7 +169,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             repository,
             FakeSubscriptionRepository(listOf(addedToday)),
-            FakeHintRepository(),
         )
 
     viewModel.onAddPastEntry(past, now)
@@ -223,7 +203,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             FakeEntryRepository(listOf(unlinked, linked)),
             FakeSubscriptionRepository(listOf(expiredPass)),
-            FakeHintRepository(),
         )
 
     assertEquals(listOf(EntryLink(unlinked, "pass")), viewModel.linkSuggestions.value)
@@ -235,7 +214,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             FakeEntryRepository(listOf(unlinked)),
             FakeSubscriptionRepository(),
-            FakeHintRepository(),
         )
 
     assertEquals(emptyList<EntryLink>(), viewModel.linkSuggestions.value)
@@ -248,7 +226,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             repository,
             FakeSubscriptionRepository(listOf(expiredPass)),
-            FakeHintRepository(),
         )
 
     viewModel.onLinkEntries(viewModel.linkSuggestions.value)
@@ -264,7 +241,6 @@ class HistoryViewModelTest {
         HistoryViewModel(
             repository,
             FakeSubscriptionRepository(listOf(expiredPass)),
-            FakeHintRepository(),
         )
     val links = viewModel.linkSuggestions.value
     viewModel.onLinkEntries(links)
@@ -272,25 +248,5 @@ class HistoryViewModelTest {
     viewModel.onUnlinkEntries(links)
 
     assertEquals(listOf(unlinked), repository.storedEntries)
-  }
-
-  @Test
-  fun showSwipeHint_isTrue_untilItIsDismissed() {
-    val hints = FakeHintRepository()
-    val viewModel = HistoryViewModel(FakeEntryRepository(), FakeSubscriptionRepository(), hints)
-    assertEquals(true, viewModel.showSwipeHint.value)
-
-    viewModel.onSwipeHintDismissed()
-
-    assertEquals(false, viewModel.showSwipeHint.value)
-    assertEquals(setOf(Hint.SwipeToDelete), hints.dismissed)
-  }
-
-  @Test
-  fun showSwipeHint_isFalse_whenItWasDismissedBefore() {
-    val hints = FakeHintRepository(dismissed = setOf(Hint.SwipeToDelete))
-    val viewModel = HistoryViewModel(FakeEntryRepository(), FakeSubscriptionRepository(), hints)
-
-    assertEquals(false, viewModel.showSwipeHint.value)
   }
 }

@@ -2,32 +2,20 @@ package com.github.se.pooltrack.ui.history
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -136,94 +124,53 @@ private fun DateBlock(day: LocalDate, isToday: Boolean, locale: Locale = Locale.
 
 /**
  * A flat, compact row for one entry: the day it happened on, then its time and swim details. Tap it
- * to open the entry; swipe it to the left to delete it (the caller offers an Undo). Screen readers
- * get a "Delete entry" action instead of the swipe.
+ * to open the entry. Deleting is done from the entry's own screen, never from the list, so
+ * scrolling can't delete a visit by accident.
  *
  * @param day The day of the entry, shown in the date block.
  * @param isToday Whether [day] is today.
  * @param texts What the row says, see [entryRowTexts].
  * @param highlighted Whether to tint the row, e.g. because its day was picked in the calendar.
  * @param onClick Called when the row is tapped.
- * @param onDeleteRequested Called when the row was swiped to the left (or the screen reader action
- *   was used). The row never goes away by itself: it springs back, and the caller asks the user to
- *   confirm before deleting anything.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SwipeableEntryRow(
+internal fun EntryRow(
     day: LocalDate,
     isToday: Boolean,
     texts: EntryRowTexts,
     highlighted: Boolean,
     onClick: () -> Unit,
-    onDeleteRequested: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  val dismissState =
-      rememberSwipeToDismissBoxState(
-          // Never settle on the dismissed position: the row springs back while the caller asks the
-          // user to confirm, so a swipe made by mistake leaves nothing changed.
-          confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) onDeleteRequested()
-            false
-          }
-      )
-  SwipeToDismissBox(
-      state = dismissState,
-      enableDismissFromStartToEnd = false,
-      modifier =
-          modifier.testTag(HistoryScreenTestTags.ENTRY_ITEM).semantics {
-            customActions =
-                listOf(
-                    CustomAccessibilityAction("Delete entry") {
-                      onDeleteRequested()
-                      true
-                    }
-                )
-          },
-      backgroundContent = {
-        Box(
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.error),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-          Icon(
-              imageVector = Icons.Filled.Delete,
-              contentDescription = null,
-              tint = MaterialTheme.colorScheme.onError,
-              modifier = Modifier.padding(end = 20.dp),
-          )
-        }
-      },
+  Surface(
+      onClick = onClick,
+      modifier = modifier.testTag(HistoryScreenTestTags.ENTRY_ITEM),
+      color =
+          if (highlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+          else MaterialTheme.colorScheme.background,
   ) {
-    Surface(
-        onClick = onClick,
-        color =
-            if (highlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-            else MaterialTheme.colorScheme.background,
-    ) {
-      Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-          DateBlock(day = day, isToday = isToday)
-          Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+    Column {
+      Row(
+          modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        DateBlock(day = day, isToday = isToday)
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
+          Text(
+              text = texts.primary,
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.SemiBold,
+          )
+          texts.secondary?.let {
             Text(
-                text = texts.primary,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            texts.secondary?.let {
-              Text(
-                  text = it,
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
           }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
       }
+      HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
   }
 }
