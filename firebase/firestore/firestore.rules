@@ -4,9 +4,10 @@ rules_version = '2';
 // Assumed Data Model
 // ===============================================================
 //
-// PoolTrack keeps its data on the device and only mirrors it to Firestore
-// as a per-user backup (model/backup/FirestoreBackup.kt). The app writes whole
-// documents with set() and deletes them; it never reads or queries them yet.
+// PoolTrack keeps the user's data in Firestore, one tree per user, and reads it
+// through the SDK's persistent on-device cache so it also works offline
+// (model/store/FirestoreDocumentStore.kt). The app writes whole documents with
+// set(), changes single fields with update(), and deletes them.
 // Optional values are sent as explicit `null` fields, not left out.
 //
 // Collection: users/{userId}/entries
@@ -34,6 +35,12 @@ rules_version = '2';
 //     the past for an expired subscription)
 //   - maxEntries: int | null (required key, 1..100000 when set)
 //   - price: number | null (required key, 0..100000 when set)
+//
+// Collection: users/{userId}/settings
+// Document ID: always "state"
+// Fields:
+//   - activeSubscriptionId: string | null (required key, <= 64 chars) - the
+//     subscription that is active, if any
 //
 // The users/{userId} document itself is never written, and nothing else is
 // stored. Everything not matched below is denied.
@@ -128,12 +135,19 @@ service cloud.firestore {
           (data.price is number && data.price >= 0 && data.price <= 100000));
     }
 
+    function isValidSettings(settingId, data) {
+      return settingId == 'state' &&
+        hasExactFields(data, ['activeSubscriptionId']) &&
+        (data.activeSubscriptionId == null ||
+          isBoundedString(data.activeSubscriptionId, 64));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /users/{userId} {
-      // Only the owner can back up, restore or remove their own data.
+      // Only the owner can read, write or remove their own data.
 
       match /entries/{entryId} {
         allow read, delete: if isOwner(userId);
@@ -149,6 +163,12 @@ service cloud.firestore {
         allow update: if isOwner(userId) &&
           isValidSubscription(subscriptionId, request.resource.data) &&
           areImmutableFieldsUnchanged(['id', 'addedAtEpochMilli']);
+      }
+
+      match /settings/{settingId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          isValidSettings(settingId, request.resource.data);
       }
     }
   }

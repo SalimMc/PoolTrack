@@ -231,6 +231,54 @@ describe('Firestore rules tests', async () => {
     });
   });
 
+  describe('Settings', () => {
+    const mySettings = (id = 'state') => doc(me, `users/alice/settings/${id}`);
+
+    test('Users can save which subscription is active', async () => {
+      await assertSucceeds(setDoc(mySettings(), { activeSubscriptionId: subscriptionId }));
+    });
+
+    test('Users can clear the active subscription', async () => {
+      await assertSucceeds(setDoc(mySettings(), { activeSubscriptionId: null }));
+    });
+
+    test('Users can read their settings', async () => {
+      await env.withSecurityRulesDisabled(async ctx => {
+        await setDoc(doc(ctx.firestore(), 'users/alice/settings/state'), {
+          activeSubscriptionId: subscriptionId,
+        });
+      });
+      await assertSucceeds(getDoc(mySettings()));
+    });
+
+    test('Settings must be the state document', async () => {
+      await assertFails(setDoc(mySettings('other'), { activeSubscriptionId: subscriptionId }));
+    });
+
+    test('Settings need the active subscription key and nothing else', async () => {
+      await assertFails(setDoc(mySettings(), {}));
+      await assertFails(setDoc(mySettings(), { activeSubscriptionId: null, extra: 1 }));
+    });
+
+    test('The active subscription must be a short string or null', async () => {
+      await assertFails(setDoc(mySettings(), { activeSubscriptionId: 12 }));
+      await assertFails(setDoc(mySettings(), { activeSubscriptionId: '' }));
+      await assertFails(setDoc(mySettings(), { activeSubscriptionId: 'x'.repeat(65) }));
+    });
+
+    test('Other users cannot read or write my settings', async () => {
+      const theirs = doc(other, 'users/alice/settings/state');
+      await assertFails(getDoc(theirs));
+      await assertFails(setDoc(theirs, { activeSubscriptionId: subscriptionId }));
+    });
+
+    test('Signed-out visitors cannot read or write settings', async () => {
+      const theirs = doc(anonymous, 'users/alice/settings/state');
+      await assertFails(getDoc(theirs));
+      await assertFails(setDoc(theirs, { activeSubscriptionId: null }));
+    });
+  });
+
   describe('Subscription validation', () => {
     const newId = '9a9a9a9a-0000-4000-8000-000000000003';
     const valid = { ...subscription, id: newId };
