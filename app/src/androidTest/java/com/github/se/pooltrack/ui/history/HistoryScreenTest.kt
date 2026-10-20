@@ -8,7 +8,6 @@ import androidx.compose.ui.test.performClick
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.test.platform.app.InstrumentationRegistry
 import com.github.se.pooltrack.model.entry.EntryRepositoryLocal
-import com.github.se.pooltrack.model.hint.HintRepositoryLocal
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryLocal
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Before
@@ -49,7 +48,6 @@ class HistoryScreenTest {
         HistoryViewModel(
             EntryRepositoryLocal(application, currentUid = uid),
             SubscriptionRepositoryLocal(application, currentUid = uid),
-            HintRepositoryLocal(application),
         )
     composeTestRule.setContent { HistoryScreen(viewModel = viewModel) }
   }

@@ -6,9 +6,6 @@ import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.entry.EntryRepository
 import com.github.se.pooltrack.model.entry.EntryRepositoryProvider
 import com.github.se.pooltrack.model.entry.timestamp
-import com.github.se.pooltrack.model.hint.Hint
-import com.github.se.pooltrack.model.hint.HintRepository
-import com.github.se.pooltrack.model.hint.HintRepositoryProvider
 import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.model.subscription.SubscriptionRepository
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
@@ -20,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -48,33 +44,15 @@ data class EntryLink(val entry: Entry, val subscriptionId: String)
  * @property repository The repository used to read, add and delete entries.
  * @property subscriptionRepository The repository used to find which subscription a past entry
  *   belongs to.
- * @property hintRepository The repository that remembers which one-time tips were dismissed.
  */
 class HistoryViewModel(
     private val repository: EntryRepository = EntryRepositoryProvider.repository,
     private val subscriptionRepository: SubscriptionRepository =
         SubscriptionRepositoryProvider.repository,
-    private val hintRepository: HintRepository = HintRepositoryProvider.repository,
 ) : ViewModel() {
 
   val entries: StateFlow<List<Entry>> =
       repository.getEntries().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-  /**
-   * Whether to show the tip about swiping a visit to delete it: until the user dismisses it, or
-   * proves they know by deleting a visit that way. `false` until the stored answer is read, so it
-   * never flashes up for someone who already dismissed it.
-   */
-  val showSwipeHint: StateFlow<Boolean> =
-      hintRepository
-          .isDismissed(Hint.SwipeToDelete)
-          .map { !it }
-          .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-  /** Remembers that the swipe tip was dealt with, so it is not shown again. */
-  fun onSwipeHintDismissed() {
-    viewModelScope.launch { hintRepository.dismiss(Hint.SwipeToDelete) }
-  }
 
   private val _addPastEntryResult = MutableStateFlow<AddPastEntryResult?>(null)
 
@@ -116,11 +94,6 @@ class HistoryViewModel(
   /** Removes [entry], e.g. to undo a misclick on the scanner confirmation. */
   fun onDeleteEntry(entry: Entry) {
     viewModelScope.launch { repository.deleteEntry(entry) }
-  }
-
-  /** Puts back [entry] exactly as it was, to undo [onDeleteEntry]. */
-  fun onRestoreEntry(entry: Entry) {
-    viewModelScope.launch { repository.addEntry(entry) }
   }
 
   /**

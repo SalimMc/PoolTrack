@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DateRange
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -38,7 +37,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.entry.timestamp
 import com.github.se.pooltrack.ui.history.heatmap.HistoryOverview
 import com.github.se.pooltrack.ui.history.heatmap.entryCountsByDay
@@ -61,10 +59,6 @@ object HistoryScreenTestTags {
   const val EMPTY_MESSAGE = "HistoryScreenEmptyMessage"
   const val ENTRY_LIST = "HistoryScreenEntryList"
   const val WEEK_HEADER = "HistoryScreenWeekHeader"
-  const val SWIPE_HINT = "HistoryScreenSwipeHint"
-  const val CONFIRM_DELETE_BUTTON = "HistoryScreenConfirmDeleteButton"
-  const val CANCEL_DELETE_BUTTON = "HistoryScreenCancelDeleteButton"
-  const val SWIPE_HINT_DISMISS = "HistoryScreenSwipeHintDismiss"
   const val ENTRY_ITEM = "HistoryScreenEntryItem"
   const val ADD_PAST_ENTRY_BUTTON = "HistoryScreenAddPastEntryButton"
   const val UNDO_ADD_ACTION = "Undo"
@@ -92,7 +86,6 @@ fun HistoryScreen(
 ) {
   val entries by viewModel.entries.collectAsState()
   var showAddSheet by remember { mutableStateOf(false) }
-  var entryPendingDeletion by remember { mutableStateOf<Entry?>(null) }
   var highlightedDate by remember { mutableStateOf<LocalDate?>(null) }
   // Remembered across openings, so adding several entries from the same day takes one tap each.
   var lastAddedDate by remember { mutableStateOf(LocalDate.now(ZONE)) }
@@ -101,7 +94,6 @@ fun HistoryScreen(
   val snackbarHostState = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
   val linkSuggestions by viewModel.linkSuggestions.collectAsState()
-  val showSwipeHint by viewModel.showSwipeHint.collectAsState()
   val listState = rememberLazyListState()
 
   // On success the sheet closes and an Undo snackbar appears. The snackbar is launched in its own
@@ -122,22 +114,6 @@ fun HistoryScreen(
     }
   }
 
-  // Deleting is confirmed first (see the dialog below), and a snackbar still offers an Undo.
-  val onDeleteEntry: (Entry) -> Unit = { entry ->
-    viewModel.onDeleteEntry(entry)
-    viewModel.onSwipeHintDismissed()
-    scope.launch {
-      snackbarHostState.currentSnackbarData?.dismiss()
-      val outcome =
-          snackbarHostState.showSnackbar(
-              message = "Entry deleted",
-              actionLabel = HistoryScreenTestTags.UNDO_ADD_ACTION,
-              withDismissAction = true,
-          )
-      if (outcome == SnackbarResult.ActionPerformed) viewModel.onRestoreEntry(entry)
-    }
-  }
-
   if (showAddSheet) {
     AddPastEntrySheet(
         initialDate = lastAddedDate,
@@ -152,33 +128,6 @@ fun HistoryScreen(
         onDismiss = {
           showAddSheet = false
           viewModel.onAddPastEntryResultHandled()
-        },
-    )
-  }
-
-  entryPendingDeletion?.let { entry ->
-    AlertDialog(
-        onDismissRequest = { entryPendingDeletion = null },
-        title = { Text("Delete this visit?") },
-        text = { Text("${deletionSummary(entry)} You can undo it right after.") },
-        confirmButton = {
-          TextButton(
-              onClick = {
-                onDeleteEntry(entry)
-                entryPendingDeletion = null
-              },
-              modifier = Modifier.testTag(HistoryScreenTestTags.CONFIRM_DELETE_BUTTON),
-          ) {
-            Text("Delete")
-          }
-        },
-        dismissButton = {
-          TextButton(
-              onClick = { entryPendingDeletion = null },
-              modifier = Modifier.testTag(HistoryScreenTestTags.CANCEL_DELETE_BUTTON),
-          ) {
-            Text("Cancel")
-          }
         },
     )
   }
@@ -233,9 +182,8 @@ fun HistoryScreen(
       val rows =
           remember(entries, firstDayOfWeek) { buildHistoryRows(entries, firstDayOfWeek, ZONE) }
       val headerClearance = with(LocalDensity.current) { STICKY_HEADER_CLEARANCE.roundToPx() }
-      // The overview, then the link banner and the swipe tip when they show, come before the rows.
-      val leadingItems =
-          1 + (if (linkSuggestions.isEmpty()) 0 else 1) + (if (showSwipeHint) 1 else 0)
+      // The overview, then the link banner when it shows, come before the rows.
+      val leadingItems = 1 + (if (linkSuggestions.isEmpty()) 0 else 1)
 
       // A picked day stays highlighted for a moment, so the eye can find its row.
       LaunchedEffect(highlightedDate) {
@@ -276,14 +224,6 @@ fun HistoryScreen(
               modifier = Modifier.padding(vertical = 4.dp),
           )
         }
-        if (showSwipeHint) {
-          item(key = "swipe-hint") {
-            SwipeHint(
-                onDismiss = viewModel::onSwipeHintDismissed,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-          }
-        }
         if (linkSuggestions.isNotEmpty()) {
           item(key = "link-banner") {
             LinkBanner(
@@ -321,7 +261,7 @@ fun HistoryScreen(
                 }
             is HistoryRow.Item ->
                 item(key = row.key) {
-                  SwipeableEntryRow(
+                  EntryRow(
                       day = row.day,
                       isToday = row.day == today,
                       texts =
@@ -333,35 +273,10 @@ fun HistoryScreen(
                       onClick = {
                         navigationActions?.navigateToEntryDetails(row.entry.timestampEpochMilli)
                       },
-                      onDeleteRequested = { entryPendingDeletion = row.entry },
                   )
                 }
           }
         }
-      }
-    }
-  }
-}
-
-/** A one-time tip that visits can be swiped away, shown until it is dismissed. */
-@Composable
-private fun SwipeHint(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-  Card(modifier = modifier.fillMaxWidth().testTag(HistoryScreenTestTags.SWIPE_HINT)) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-      Text(
-          text = "Tip: swipe a visit to the left to delete it.",
-          style = MaterialTheme.typography.bodyMedium,
-          modifier = Modifier.weight(1f).padding(vertical = 12.dp),
-      )
-      TextButton(
-          onClick = onDismiss,
-          modifier = Modifier.testTag(HistoryScreenTestTags.SWIPE_HINT_DISMISS),
-      ) {
-        Text("Got it")
       }
     }
   }
@@ -409,10 +324,3 @@ private const val HIGHLIGHT_MILLIS = 2_500L
 
 /** How far below the top a scrolled-to row stops, so the sticky week header doesn't cover it. */
 private val STICKY_HEADER_CLEARANCE = 56.dp
-
-/** "The visit on Wednesday, Oct 7 at 12:00 PM will be removed." */
-internal fun deletionSummary(entry: Entry): String {
-  val day = entry.timestamp.atZone(ZONE).toLocalDate()
-  val time = entryTimeFormatter().format(entry.timestamp)
-  return "The visit on ${dayLabel(day, LocalDate.now(ZONE))} at $time will be removed."
-}
