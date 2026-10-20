@@ -33,12 +33,14 @@ import com.github.se.pooltrack.utils.FakeSubscriptionRepository
 import com.github.se.pooltrack.utils.MainDispatcherRule
 import io.mockk.mockk
 import io.mockk.verify
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -111,6 +113,16 @@ class HistoryScreenRobolectricTest {
     composeTestRule.onNodeWithText(timeLabel(thisWeekMorning)).assertIsDisplayed()
     composeTestRule.onNodeWithText(timeLabel(thisWeekEvening)).assertIsDisplayed()
     composeTestRule.onNodeWithText(timeLabel(older)).assertIsDisplayed()
+  }
+
+  @Test
+  @Config(qualifiers = "en-rUS-w360dp-h1200dp")
+  fun historyScreen_startsWeeksOnMonday_evenWithAUsLocale() {
+    // A Sunday and the Monday after it: one week in the US (Sunday start), two on Monday start.
+    val sunday = today.with(TemporalAdjusters.previous(DayOfWeek.SUNDAY)).minusWeeks(1)
+    show(FakeEntryRepository(listOf(entryAt(sunday), entryAt(sunday.plusDays(1)))))
+
+    composeTestRule.onAllNodesWithTag(HistoryScreenTestTags.WEEK_HEADER).assertCountEquals(2)
   }
 
   @Test

@@ -34,7 +34,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -48,12 +47,12 @@ import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.Screen
 import com.github.se.pooltrack.ui.navigation.Tab
 import com.github.se.pooltrack.ui.navigation.TopNavigationMenu
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
-import java.time.temporal.WeekFields
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -74,6 +73,9 @@ object HistoryScreenTestTags {
 }
 
 private val ZONE = ZoneId.systemDefault()
+
+/** History weeks always start on Monday, whatever the phone's locale says. */
+internal val HISTORY_FIRST_DAY_OF_WEEK = DayOfWeek.MONDAY
 
 // Built fresh on every call rather than cached as a val, so a locale change while the app is
 // running (without a process restart) is picked up instead of baked in at class-init time.
@@ -226,7 +228,7 @@ fun HistoryScreen(
       }
     } else {
       val today = LocalDate.now(ZONE)
-      val firstDayOfWeek = WeekFields.of(LocalConfiguration.current.locales[0]).firstDayOfWeek
+      val firstDayOfWeek = HISTORY_FIRST_DAY_OF_WEEK
       val countsByDay = remember(entries) { entryCountsByDay(entries, ZONE) }
       val rows =
           remember(entries, firstDayOfWeek) { buildHistoryRows(entries, firstDayOfWeek, ZONE) }
