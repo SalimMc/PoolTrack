@@ -41,3 +41,18 @@ val Entry.timestamp: Instant
  */
 fun Entry.isSameEntryAs(other: Entry): Boolean =
     timestampEpochMilli == other.timestampEpochMilli && subscriptionId == other.subscriptionId
+
+/**
+ * Rebuilds an entry from the fields mirrored to Firestore, or `null` if they are unusable.
+ * [Entry.awaitingDistance] is never restored: an old swim must not send the user back to the "log
+ * your distance" screen.
+ */
+fun entryFromBackup(data: Map<String, Any?>): Entry? {
+  val timestamp = (data["timestampEpochMilli"] as? Number)?.toLong() ?: return null
+  return Entry(
+      timestampEpochMilli = timestamp,
+      subscriptionId = data["subscriptionId"] as? String,
+      swimDurationMillis = (data["swimDurationMillis"] as? Number)?.toLong(),
+      swimDistanceMeters = (data["swimDistanceMeters"] as? Number)?.toInt(),
+  )
+}

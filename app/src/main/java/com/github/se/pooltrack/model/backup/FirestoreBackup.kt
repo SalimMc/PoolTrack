@@ -24,6 +24,19 @@ suspend fun deleteFromFirestore(collection: String, docId: String) {
   runCatching { userCollection(uid, collection).document(docId).delete().awaitResult() }
 }
 
+/**
+ * The best-effort counterpart of [mirrorToFirestore] for restoring: the fields of every document
+ * under `users/{uid}/{collection}`, or `null` if nobody is signed in or the read failed (e.g.
+ * offline), so a failed restore is never worse than having no backup.
+ */
+suspend fun fetchFromFirestore(collection: String): List<Map<String, Any?>>? {
+  val uid = Firebase.auth.currentUser?.uid ?: return null
+  return runCatching {
+    userCollection(uid, collection).get().awaitResult().documents.mapNotNull { it.data }
+  }
+      .getOrNull()
+}
+
 private fun userCollection(uid: String, collection: String) =
     Firebase.firestore.collection("users").document(uid).collection(collection)
 

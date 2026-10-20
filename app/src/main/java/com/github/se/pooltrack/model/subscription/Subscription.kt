@@ -67,3 +67,27 @@ fun Subscription.daysUntilExpiration(
 ): Long? = expiresAt?.let {
   ChronoUnit.DAYS.between(now.atZone(zone).toLocalDate(), it.atZone(zone).toLocalDate())
 }
+
+/** Whether this subscription still has a PDF to show (a restored one has none until re-added). */
+val Subscription.hasPdf: Boolean
+  get() = uri.isNotBlank()
+
+/**
+ * Rebuilds a subscription from the fields mirrored to Firestore, or `null` if they are unusable.
+ * The PDF's `uri` was never mirrored (it only means something on the device that picked it), so the
+ * result has none, see [hasPdf].
+ */
+fun subscriptionFromBackup(data: Map<String, Any?>): Subscription? {
+  val id = data["id"] as? String ?: return null
+  val displayName = data["displayName"] as? String ?: return null
+  val addedAt = (data["addedAtEpochMilli"] as? Number)?.toLong() ?: return null
+  return Subscription(
+      id = id,
+      uri = "",
+      displayName = displayName,
+      addedAtEpochMilli = addedAt,
+      expiresAtEpochMilli = (data["expiresAtEpochMilli"] as? Number)?.toLong(),
+      maxEntries = (data["maxEntries"] as? Number)?.toInt(),
+      price = (data["price"] as? Number)?.toDouble(),
+  )
+}

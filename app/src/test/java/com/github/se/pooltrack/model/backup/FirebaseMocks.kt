@@ -7,7 +7,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.QuerySnapshot
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -95,5 +97,19 @@ internal class FirebaseMocks(uid: String? = "uid-1") {
   fun failWrites(error: Exception = RuntimeException("offline")) {
     every { targetDocument.set(any<Any>()) } returns failedTask(error)
     every { targetDocument.delete() } returns failedTask(error)
+  }
+
+  /** Makes reading the whole collection return one document per element of [documents]. */
+  @Suppress("UNCHECKED_CAST")
+  fun returnDocuments(vararg documents: Map<String, Any?>) {
+    val snapshots = documents.map { fields ->
+      mockk<DocumentSnapshot>().also { every { it.data } returns fields as Map<String, Any> }
+    }
+    val query = mockk<QuerySnapshot>().also { every { it.documents } returns snapshots }
+    every { targetCollection.get() } returns completedTask(query)
+  }
+
+  fun failReads(error: Exception = RuntimeException("offline")) {
+    every { targetCollection.get() } returns failedTask(error)
   }
 }
