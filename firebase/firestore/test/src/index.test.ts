@@ -26,10 +26,10 @@ describe('Firestore rules tests', async () => {
   const env = await setup();
 
   // The app signs users in with Google only, and the rules let only such accounts write.
-  const google = { firebase: { sign_in_provider: 'google.com' } };
+  const google = { firebase: { sign_in_provider: 'google.com' as const } };
   const me = env.authenticatedContext('alice', google).firestore();
   const other = env.authenticatedContext('bob', google).firestore();
-  const anonymousAccount = env.authenticatedContext('alice', { firebase: { sign_in_provider: 'anonymous' } }).firestore();
+  const anonymousAccount = env.authenticatedContext('alice', { firebase: { sign_in_provider: 'anonymous' as const } }).firestore();
   const noProviderAccount = env.authenticatedContext('alice').firestore();
   const anonymous = env.unauthenticatedContext().firestore();
 
