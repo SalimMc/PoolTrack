@@ -7,7 +7,7 @@ googleServices = "4.5.0"
 
 # UI Compose
 # Every androidx.compose.* artifact is versioned by the BOM below - do not pin them here.
-composeBom = "2026.08.00"
+composeBom = "2026.09.00"
 
 # AndroidX and Core Libraries
 activityCompose = "1.13.0"
