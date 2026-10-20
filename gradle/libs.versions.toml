@@ -11,7 +11,7 @@ composeBom = "2026.08.00"
 
 # AndroidX and Core Libraries
 activityCompose = "1.13.0"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 datastorePreferences = "1.1.7"
 lifecycleRuntimeKtx = "2.11.0"
 lifecycleViewmodelCompose = "2.11.0"
