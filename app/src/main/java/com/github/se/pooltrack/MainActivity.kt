@@ -27,6 +27,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.github.se.pooltrack.model.entry.EntryRepositoryProvider
 import com.github.se.pooltrack.model.hint.HintRepositoryProvider
+import com.github.se.pooltrack.model.migration.migrateLocalDataOfSignedInAccounts
+import com.github.se.pooltrack.model.store.FirestoreDocumentStore
 import com.github.se.pooltrack.model.subscription.PassZoomRepositoryProvider
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
 import com.github.se.pooltrack.model.swim.isSwimPending
@@ -64,6 +66,7 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     // Debug builds stay screenshot-able, for design reviews and bug reports.
     window.applyScreenSecurity(secure = !BuildConfig.DEBUG)
+    FirestoreDocumentStore.enableOfflineCache()
     EntryRepositoryProvider.init(this)
     SubscriptionRepositoryProvider.init(this)
     PassZoomRepositoryProvider.init(this)
@@ -73,6 +76,7 @@ class MainActivity : ComponentActivity() {
     startSwimTrackingWhileASwimIsPending()
     InactivityReminderWorker.schedule(this)
     UpdateCheckWorker.schedule(this)
+    lifecycleScope.launch { migrateLocalDataOfSignedInAccounts(this@MainActivity) }
 
     setContent { PoolTrackTheme { Surface(modifier = Modifier.fillMaxSize()) { PoolTrackApp() } } }
   }
