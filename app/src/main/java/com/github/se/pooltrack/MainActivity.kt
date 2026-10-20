@@ -34,6 +34,7 @@ import com.github.se.pooltrack.model.update.UpdateRepositoryProvider
 import com.github.se.pooltrack.swim.InactivityReminderWorker
 import com.github.se.pooltrack.swim.SwimNotifications
 import com.github.se.pooltrack.swim.SwimTrackingService
+import com.github.se.pooltrack.swim.UpdateCheckWorker
 import com.github.se.pooltrack.ui.account.AccountViewModel
 import com.github.se.pooltrack.ui.account.SignInScreen
 import com.github.se.pooltrack.ui.entry.EntryDetailsScreen
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
     requestNotificationPermissionIfNeeded()
     startSwimTrackingWhileASwimIsPending()
     InactivityReminderWorker.schedule(this)
+    UpdateCheckWorker.schedule(this)
 
     setContent { PoolTrackTheme { Surface(modifier = Modifier.fillMaxSize()) { PoolTrackApp() } } }
   }

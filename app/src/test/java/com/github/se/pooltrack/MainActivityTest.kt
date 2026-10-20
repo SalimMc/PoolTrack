@@ -17,6 +17,7 @@ import com.github.se.pooltrack.model.entry.EntryRepositoryProvider
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
 import com.github.se.pooltrack.model.update.UpdateRepositoryProvider
 import com.github.se.pooltrack.swim.InactivityReminderWorker
+import com.github.se.pooltrack.swim.UpdateCheckWorker
 import com.github.se.pooltrack.ui.account.SignInScreenTestTags
 import com.github.se.pooltrack.ui.navigation.NavigationTestTags
 import com.github.se.pooltrack.ui.poolstay.PoolStayScreenTestTags
@@ -67,6 +68,19 @@ class MainActivityTest {
       val work =
           WorkManager.getInstance(ApplicationProvider.getApplicationContext())
               .getWorkInfosForUniqueWork(InactivityReminderWorker.WORK_NAME)
+              .get()
+
+      assertEquals(1, work.size)
+      assertEquals(WorkInfo.State.ENQUEUED, work.single().state)
+    }
+  }
+
+  @Test
+  fun onCreate_schedulesThePeriodicUpdateCheck() {
+    ActivityScenario.launch(MainActivity::class.java).use {
+      val work =
+          WorkManager.getInstance(ApplicationProvider.getApplicationContext())
+              .getWorkInfosForUniqueWork(UpdateCheckWorker.WORK_NAME)
               .get()
 
       assertEquals(1, work.size)

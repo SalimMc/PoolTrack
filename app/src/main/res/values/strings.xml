@@ -8,5 +8,8 @@
     <string name="swim_report_text">Tap to log the distance of your swim.</string>
     <string name="inactivity_reminder_channel_name">Swim reminders</string>
     <string name="inactivity_reminder_title">Time for a swim?</string>
+    <string name="update_channel_name">App updates</string>
+    <string name="update_available_title">PoolTrack update available</string>
+    <string name="update_available_text">Version %1$s is ready to install. Open the app to update.</string>
     <string name="inactivity_reminder_text">You haven\'t been to the pool for a while.</string>
 </resources>

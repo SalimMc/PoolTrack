@@ -18,6 +18,8 @@ object SwimNotifications {
   const val REPORT_NOTIFICATION_ID = 2
   const val INACTIVITY_CHANNEL_ID = "swim_inactivity"
   const val INACTIVITY_NOTIFICATION_ID = 3
+  const val UPDATE_CHANNEL_ID = "app_update"
+  const val UPDATE_NOTIFICATION_ID = 4
 
   /** Creates both channels; safe to call repeatedly. */
   fun createChannels(context: Context) {
@@ -90,6 +92,30 @@ object SwimNotifications {
     context
         .getSystemService(NotificationManager::class.java)
         .notify(INACTIVITY_NOTIFICATION_ID, notification)
+  }
+
+  /**
+   * Tells the user that release [version] is available; tapping it opens the app, which then shows
+   * the update screen. Silently dropped if notifications are not allowed.
+   */
+  fun postUpdateAvailable(context: Context, version: String) {
+    val manager = context.getSystemService(NotificationManager::class.java)
+    manager.createNotificationChannel(
+        NotificationChannel(
+            UPDATE_CHANNEL_ID,
+            context.getString(R.string.update_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        )
+    )
+    val notification =
+        Notification.Builder(context, UPDATE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_swim_notification)
+            .setContentTitle(context.getString(R.string.update_available_title))
+            .setContentText(context.getString(R.string.update_available_text, version))
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent(context))
+            .build()
+    manager.notify(UPDATE_NOTIFICATION_ID, notification)
   }
 
   /** Removes the reminder once it is no longer needed, e.g. the distance was logged in the app. */
