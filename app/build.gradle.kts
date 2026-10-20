@@ -89,6 +89,7 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.datastore.preferences)
+  implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.kotlinx.serialization.json)
 
   // Firebase: Google Sign-In (via Credential Manager) + Firestore backup of local data.
@@ -116,6 +117,7 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.robolectric)
   testImplementation(libs.mockk)
+  testImplementation(libs.androidx.work.testing)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(platform(libs.androidx.compose.bom))
   testImplementation(libs.androidx.ui.test.junit4)
