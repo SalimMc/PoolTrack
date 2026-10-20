@@ -32,3 +32,10 @@
 # kept out of the APK itself.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# WorkManager creates its Room database by reflection through the no-argument constructor of the
+# generated WorkDatabase_Impl. R8 strips that constructor from the release build, which crashes the
+# app at startup (androidx.startup.InitializationProvider).
+-keep class androidx.work.impl.WorkDatabase_Impl {
+  <init>();
+}
