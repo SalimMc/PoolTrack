@@ -77,6 +77,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.model.subscription.addedAt
 import com.github.se.pooltrack.model.subscription.expiresAt
+import com.github.se.pooltrack.model.subscription.hasPdf
 import com.github.se.pooltrack.model.subscription.isExpired
 import com.github.se.pooltrack.model.subscription.pricePerEntry
 import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
@@ -106,6 +107,7 @@ object SubscriptionScreenTestTags {
   const val ACTIVE_BADGE = "SubscriptionScreenActiveBadge"
   const val SET_ACTIVE_BUTTON = "SubscriptionScreenSetActiveButton"
   const val EDIT_BUTTON = "SubscriptionScreenEditButton"
+  const val ATTACH_PDF_BUTTON = "SubscriptionScreenAttachPdfButton"
   const val EDIT_NAME_FIELD = "SubscriptionScreenEditNameField"
   const val DELETE_BUTTON = "SubscriptionScreenDeleteButton"
   const val DELETE_ENTRIES_NOTE = "SubscriptionScreenDeleteEntriesNote"
@@ -205,6 +207,7 @@ fun SubscriptionScreen(
   var subscriptionPendingDeletion by remember { mutableStateOf<Subscription?>(null) }
   var subscriptionBeingEdited by remember { mutableStateOf<Subscription?>(null) }
   var pickedPdfUri by remember { mutableStateOf<Uri?>(null) }
+  var subscriptionGettingPdf by remember { mutableStateOf<Subscription?>(null) }
 
   val pickPdfLauncher =
       rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -214,6 +217,14 @@ fun SubscriptionScreen(
           selectedSubscription = null
           pickedPdfUri = uri
         }
+      }
+
+  val attachPdfLauncher =
+      rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        subscriptionGettingPdf?.let { target ->
+          if (uri != null) viewModel.onAttachPdf(target.id, uri.toString())
+        }
+        subscriptionGettingPdf = null
       }
 
   pickedPdfUri?.let { uri ->
@@ -255,6 +266,11 @@ fun SubscriptionScreen(
         onEdit = {
           selectedSubscription = null
           subscriptionBeingEdited = subscription
+        },
+        onAttachPdf = {
+          selectedSubscription = null
+          subscriptionGettingPdf = subscription
+          attachPdfLauncher.launch(arrayOf("application/pdf"))
         },
         onDelete = {
           selectedSubscription = null
@@ -470,6 +486,7 @@ private fun SubscriptionDetailDialog(
     usedCount: Int,
     onSetActive: () -> Unit,
     onEdit: () -> Unit,
+    onAttachPdf: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -502,7 +519,26 @@ private fun SubscriptionDetailDialog(
         Spacer(modifier = Modifier.height(20.dp))
 
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-          SubscriptionPreview(uri = subscription.uri, width = 140.dp, height = 184.dp)
+          if (subscription.hasPdf) {
+            SubscriptionPreview(uri = subscription.uri, width = 140.dp, height = 184.dp)
+          } else {
+            // Restored from the backup, which never held the PDF itself.
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+              Text(
+                  text = "No PDF on this device",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              Button(
+                  onClick = onAttachPdf,
+                  modifier =
+                      Modifier.padding(top = 8.dp)
+                          .testTag(SubscriptionScreenTestTags.ATTACH_PDF_BUTTON),
+              ) {
+                Text("Add the PDF")
+              }
+            }
+          }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

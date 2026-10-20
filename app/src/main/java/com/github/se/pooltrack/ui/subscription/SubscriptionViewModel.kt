@@ -107,6 +107,16 @@ class SubscriptionViewModel(
   }
 
   /**
+   * Gives a subscription a PDF, for one that was restored from the backup without it.
+   *
+   * @param id The identifier of the subscription.
+   * @param uri The content URI returned by the document picker, as a string.
+   */
+  fun onAttachPdf(id: String, uri: String) {
+    viewModelScope.launch { subscriptionRepository.attachPdf(id, uri) }
+  }
+
+  /**
    * Makes the subscription with [id] the active one.
    *
    * @param id The identifier of the subscription to activate.

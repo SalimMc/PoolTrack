@@ -133,6 +133,21 @@ class SubscriptionViewModelTest {
   }
 
   @Test
+  fun onAttachPdf_givesTheSubscriptionItsPdf_andLeavesTheOthersAlone() {
+    val restored = older.copy(uri = "")
+    val subscriptions = FakeSubscriptionRepository(listOf(restored, newer), "new")
+    val viewModel = SubscriptionViewModel(subscriptions, FakeEntryRepository())
+
+    viewModel.onAttachPdf("old", "content://docs/pass.pdf")
+
+    assertEquals(
+        listOf(restored.copy(uri = "content://docs/pass.pdf"), newer),
+        subscriptions.storedSubscriptions,
+    )
+    assertEquals("new", subscriptions.storedActiveId)
+  }
+
+  @Test
   fun onDeleteSubscription_removesIt_andLeavesNoneActive_whenItWasActive() {
     val subscriptions = FakeSubscriptionRepository(listOf(older, newer), "new")
     val viewModel = SubscriptionViewModel(subscriptions, FakeEntryRepository())

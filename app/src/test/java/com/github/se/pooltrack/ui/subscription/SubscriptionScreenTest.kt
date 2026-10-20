@@ -332,6 +332,26 @@ class SubscriptionScreenTest {
   }
 
   @Test
+  fun subscriptionScreen_detailDialog_offersToAddThePdf_whenItWasRestoredWithoutOne() {
+    setScreen(FakeSubscriptionRepository(listOf(older.copy(uri = ""))))
+
+    tag(SubscriptionScreenTestTags.SUBSCRIPTION_ITEM).performClick()
+
+    tag(SubscriptionScreenTestTags.ATTACH_PDF_BUTTON).assertIsDisplayed()
+    composeRule.onNodeWithText("No PDF on this device").assertIsDisplayed()
+  }
+
+  @Test
+  fun subscriptionScreen_detailDialog_hasNoAddPdfButton_whenThePdfIsThere() {
+    setScreen(FakeSubscriptionRepository(listOf(older)))
+
+    tag(SubscriptionScreenTestTags.SUBSCRIPTION_ITEM).performClick()
+
+    tag(SubscriptionScreenTestTags.DETAIL_DIALOG).assertIsDisplayed()
+    tag(SubscriptionScreenTestTags.ATTACH_PDF_BUTTON).assertDoesNotExist()
+  }
+
+  @Test
   fun subscriptionScreen_detailDialogOfActiveSubscription_hasNoSetActiveButton() {
     setScreen(FakeSubscriptionRepository(listOf(newer), initialActiveId = "new"))
 

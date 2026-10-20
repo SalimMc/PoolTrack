@@ -300,7 +300,9 @@ private fun PdfMissingMessage(modifier: Modifier = Modifier) {
         modifier = Modifier.padding(bottom = 4.dp),
     )
     Text(
-        text = "This subscription was restored from your backup without its PDF.",
+        text =
+            "This subscription was restored from your backup without its PDF. " +
+                "Add it from the Subscriptions tab.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,

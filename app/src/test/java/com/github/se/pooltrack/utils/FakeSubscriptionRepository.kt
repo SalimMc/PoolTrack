@@ -80,6 +80,10 @@ class FakeSubscriptionRepository(
         }
   }
 
+  override suspend fun attachPdf(id: String, uri: String) {
+    subscriptions.value = subscriptions.value.map { if (it.id == id) it.copy(uri = uri) else it }
+  }
+
   override suspend fun setActiveSubscription(id: String) {
     activeId.value = id
   }
