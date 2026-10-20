@@ -10,17 +10,18 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.github.se.pooltrack.model.backup.deleteFromFirestore
+import com.github.se.pooltrack.model.backup.fetchFromFirestore
 import com.github.se.pooltrack.model.backup.mirrorToFirestore
 import java.util.UUID
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -60,9 +61,14 @@ class SubscriptionRepositoryLocal(
         if (uid == null) {
           flowOf(null)
         } else {
-          flow {
+          channelFlow {
             context.subscriptionDataStore.edit { claimLegacySubscriptions(it, uid) }
-            emitAll(context.subscriptionDataStore.data.map { uid to it })
+            // A fresh install has no subscriptions stored for this account at all: bring back the
+            // backup in the background, the stored data then re-emits.
+            if (context.subscriptionDataStore.data.first()[subscriptionsKey(uid)] == null) {
+              launch { restoreSubscriptions(uid) }
+            }
+            context.subscriptionDataStore.data.map { uid to it }.collect { send(it) }
           }
         }
       }
@@ -177,6 +183,26 @@ class SubscriptionRepositoryLocal(
       }
     }
     deleteFromFirestore(collection = BACKUP_COLLECTION, docId = id)
+  }
+
+  /**
+   * Merges the subscriptions backed up in Firestore into the stored ones, skipping any already
+   * there. They come back without their PDF (see [subscriptionFromBackup]), and the newest one that
+   * has not expired becomes active if none is.
+   */
+  private suspend fun restoreSubscriptions(uid: String) {
+    val restored = fetchFromFirestore(BACKUP_COLLECTION)?.mapNotNull(::subscriptionFromBackup)
+    if (restored.isNullOrEmpty()) return
+    context.subscriptionDataStore.edit { prefs ->
+      val existing = readSubscriptions(prefs, uid)
+      val all = existing + restored.filter { r -> existing.none { it.id == r.id } }
+      prefs[subscriptionsKey(uid)] = Json.encodeToString(all)
+      if (prefs[activeIdKey(uid)] == null) {
+        all.filterNot { it.isExpired }
+            .maxByOrNull { it.addedAtEpochMilli }
+            ?.let { prefs[activeIdKey(uid)] = it.id }
+      }
+    }
   }
 
   private suspend fun requireUid(): String =

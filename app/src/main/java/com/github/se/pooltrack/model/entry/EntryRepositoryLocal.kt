@@ -7,17 +7,18 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.github.se.pooltrack.model.backup.deleteFromFirestore
+import com.github.se.pooltrack.model.backup.fetchFromFirestore
 import com.github.se.pooltrack.model.backup.mirrorToFirestore
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -57,13 +58,16 @@ class EntryRepositoryLocal(
         if (uid == null) {
           flowOf(emptyList())
         } else {
-          flow {
+          channelFlow {
             context.entryDataStore.edit { claimLegacyEntries(it, uid) }
-            emitAll(
-                context.entryDataStore.data.map { prefs ->
-                  readEntries(prefs, uid).sortedByDescending { it.timestamp }
-                }
-            )
+            // A fresh install has no entries stored for this account at all (not even an empty
+            // list): bring back the backup in the background, the stored data then re-emits.
+            if (context.entryDataStore.data.first()[entriesKey(uid)] == null) {
+              launch { restoreEntries(uid) }
+            }
+            context.entryDataStore.data
+                .map { prefs -> readEntries(prefs, uid).sortedByDescending { it.timestamp } }
+                .collect { send(it) }
           }
         }
       }
@@ -131,6 +135,17 @@ class EntryRepositoryLocal(
                 "awaitingDistance" to entry.awaitingDistance,
             ),
     )
+  }
+
+  /** Merges the entries backed up in Firestore into the stored ones, skipping any already there. */
+  private suspend fun restoreEntries(uid: String) {
+    val restored = fetchFromFirestore(BACKUP_COLLECTION)?.mapNotNull(::entryFromBackup)
+    if (restored.isNullOrEmpty()) return
+    context.entryDataStore.edit { prefs ->
+      val existing = readEntries(prefs, uid)
+      val missing = restored.filter { entry -> existing.none { it.isSameEntryAs(entry) } }
+      prefs[entriesKey(uid)] = Json.encodeToString(existing + missing)
+    }
   }
 
   private suspend fun requireUid(): String =

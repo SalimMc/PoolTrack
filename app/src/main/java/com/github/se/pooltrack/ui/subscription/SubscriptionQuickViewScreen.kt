@@ -101,6 +101,8 @@ fun SubscriptionQuickViewScreen(
           cooldown = cooldown,
           modifier = Modifier.padding(paddingValues),
       )
+    } else if (currentUri != null && currentUri.isBlank()) {
+      PdfMissingMessage(modifier = Modifier.padding(paddingValues))
     } else if (currentUri == null) {
       Column(
           modifier = Modifier.fillMaxSize().padding(paddingValues).padding(32.dp),
@@ -281,5 +283,27 @@ private fun MaxBrightness() {
       restoredParams.screenBrightness = originalBrightness
       window.attributes = restoredParams
     }
+  }
+}
+
+/** Shown instead of the pass when the active subscription came back from the backup without it. */
+@Composable
+private fun PdfMissingMessage(modifier: Modifier = Modifier) {
+  Column(
+      modifier = modifier.fillMaxSize().padding(32.dp),
+      verticalArrangement = Arrangement.Center,
+      horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Text(
+        text = "Pass PDF missing",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+    Text(
+        text = "This subscription was restored from your backup without its PDF.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
   }
 }
