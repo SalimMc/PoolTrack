@@ -39,8 +39,22 @@ sealed interface UpdateUiState {
       val needsPermission: Boolean = false,
   ) : UpdateUiState
 
-  data class Failed(val update: AppUpdate, val message: String) : UpdateUiState
+  /** [failures] counts the failed downloads and installs so far, see [canSkip]. */
+  data class Failed(val update: AppUpdate, val message: String, val failures: Int = 1) :
+      UpdateUiState {
+
+    /** After a few failures the user may carry on without updating, until the next launch. */
+    val canSkip: Boolean
+      get() = failures >= MAX_FAILURES_BEFORE_SKIP
+  }
 }
+
+/**
+ * How many times downloading or installing may fail before the user is allowed to continue without
+ * the update. A release that can never be installed (a broken file, or one signed with another key)
+ * must not lock them out of their pass for good.
+ */
+internal const val MAX_FAILURES_BEFORE_SKIP = 3
 
 /**
  * How long after the app starts a found update may still take over the screen. A slower answer is
@@ -54,9 +68,9 @@ internal const val STARTUP_CHECK_WINDOW_MILLIS = 10_000L
  * when the app starts, and never again during the session, so a running session (viewing the
  * subscription PDF, a swim being tracked) is not interrupted: a release published meanwhile is
  * picked up on the next launch. Any state but [UpdateUiState.None] means the app must not be used
- * until the update is installed, so there is no way to dismiss it: it walks the user through
- * downloading and installing instead, and the installer opens by itself as soon as the download is
- * done.
+ * until the update is installed: it walks the user through downloading and installing, and the
+ * installer opens by itself as soon as the download is done. The only way out is after
+ * [MAX_FAILURES_BEFORE_SKIP] failures, see [onSkipClick], and it lasts until the next launch.
  *
  * Installing replaces the APK and kills the process, including the swim tracking service. The swim
  * itself is not lost (it is derived from the persisted entry), but its unlock notification only
@@ -76,6 +90,7 @@ class UpdateViewModel(
   val state: StateFlow<UpdateUiState> = _state.asStateFlow()
 
   private var downloadJob: Job? = null
+  private var failures = 0
   private val startMillis = now()
 
   init {
@@ -133,9 +148,7 @@ class UpdateViewModel(
     downloadJob = viewModelScope.launch {
       repository
           .download(update)
-          .catch { error ->
-            _state.value = UpdateUiState.Failed(update, error.message ?: "Download failed")
-          }
+          .catch { error -> fail(update, error.message ?: "Download failed") }
           .collect { status ->
             when (status) {
               is DownloadStatus.Progress ->
@@ -152,7 +165,24 @@ class UpdateViewModel(
           InstallResult.STARTED -> UpdateUiState.ReadyToInstall(update, apk)
           InstallResult.PERMISSION_REQUIRED ->
               UpdateUiState.ReadyToInstall(update, apk, needsPermission = true)
-          InstallResult.FAILED -> UpdateUiState.Failed(update, "Couldn't open the installer")
+          InstallResult.FAILED -> return fail(update, "Couldn't open the installer")
         }
+  }
+
+  private fun fail(update: AppUpdate, message: String) {
+    failures++
+    _state.value = UpdateUiState.Failed(update, message, failures)
+  }
+
+  /**
+   * Lets the user carry on without the update, once it failed [MAX_FAILURES_BEFORE_SKIP] times. The
+   * update is offered again on the next launch.
+   */
+  fun onSkipClick() {
+    val current = _state.value as? UpdateUiState.Failed ?: return
+    if (!current.canSkip) return
+    downloadJob?.cancel()
+    downloadJob = null
+    _state.value = UpdateUiState.None
   }
 }

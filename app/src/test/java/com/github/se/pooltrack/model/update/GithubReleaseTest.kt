@@ -36,11 +36,9 @@ class GithubReleaseTest {
   }
 
   @Test
-  fun toAppUpdate_hasNoChecksum_whenTheDigestIsMissingOrNotSha256() {
-    assertNull(release.copy(assets = listOf(apk.copy(digest = null))).toAppUpdate(prefix)?.sha256)
-    assertNull(
-        release.copy(assets = listOf(apk.copy(digest = "md5:abc"))).toAppUpdate(prefix)?.sha256
-    )
+  fun toAppUpdate_isNull_whenTheDigestIsMissingOrNotSha256() {
+    assertNull(release.copy(assets = listOf(apk.copy(digest = null))).toAppUpdate(prefix))
+    assertNull(release.copy(assets = listOf(apk.copy(digest = "md5:abc"))).toAppUpdate(prefix))
   }
 
   @Test

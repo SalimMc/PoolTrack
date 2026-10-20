@@ -26,23 +26,24 @@ data class GithubAsset(
 
 /**
  * Turns this release into an [AppUpdate], or `null` if it cannot be installed: a draft or
- * pre-release, no `.apk` asset, or an APK that is not hosted under [trustedUrlPrefix]. The prefix
- * check keeps the app from downloading a file from an unexpected host or repository.
+ * pre-release, no `.apk` asset, an APK that is not hosted under [trustedUrlPrefix], or an APK
+ * GitHub published no SHA-256 for. The prefix check keeps the app from downloading a file from an
+ * unexpected host or repository, and the checksum is what lets the download be verified, so an
+ * update that cannot be verified is not offered at all.
  */
 fun GithubRelease.toAppUpdate(trustedUrlPrefix: String): AppUpdate? {
   if (draft || prerelease) return null
   val apk = assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) } ?: return null
   if (!isTrustedDownloadUrl(apk.downloadUrl, trustedUrlPrefix)) return null
+  val sha256 =
+      apk.digest?.takeIf { it.startsWith(SHA256_PREFIX) }?.removePrefix(SHA256_PREFIX)?.lowercase()
+          ?: return null
   return AppUpdate(
       version = tagName.trim().removePrefix("v"),
       notes = body.orEmpty().trim(),
       apkUrl = apk.downloadUrl,
       sizeBytes = apk.size,
-      sha256 =
-          apk.digest
-              ?.takeIf { it.startsWith(SHA256_PREFIX) }
-              ?.removePrefix(SHA256_PREFIX)
-              ?.lowercase(),
+      sha256 = sha256,
   )
 }
 

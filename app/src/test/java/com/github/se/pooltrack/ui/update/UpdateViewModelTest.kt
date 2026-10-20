@@ -266,4 +266,52 @@ class UpdateViewModelTest {
 
     assertEquals(UpdateUiState.Available(UPDATE), viewModel.state.value)
   }
+
+  private fun failingDownloads() = flow<DownloadStatus> { throw IOException("Checksum mismatch") }
+
+  @Test
+  fun onSkipClick_doesNothing_beforeTheUpdateFailedSeveralTimes() {
+    val viewModel =
+        viewModel(FakeUpdateRepository(update = UPDATE, downloadFlow = failingDownloads()))
+    viewModel.onUpdateClick()
+    viewModel.onUpdateClick()
+
+    viewModel.onSkipClick()
+
+    val state = viewModel.state.value as UpdateUiState.Failed
+    assertEquals(2, state.failures)
+    assertEquals(false, state.canSkip)
+  }
+
+  @Test
+  fun onSkipClick_letsTheUserContinue_afterTheUpdateFailedThreeTimes() {
+    val viewModel =
+        viewModel(FakeUpdateRepository(update = UPDATE, downloadFlow = failingDownloads()))
+    repeat(MAX_FAILURES_BEFORE_SKIP) { viewModel.onUpdateClick() }
+    assertEquals(true, (viewModel.state.value as UpdateUiState.Failed).canSkip)
+
+    viewModel.onSkipClick()
+
+    assertEquals(UpdateUiState.None, viewModel.state.value)
+  }
+
+  @Test
+  fun failedInstalls_count_towardsTheEscape() {
+    val repository = FakeUpdateRepository(update = UPDATE, installResult = InstallResult.FAILED)
+    val viewModel = viewModel(repository)
+    repeat(MAX_FAILURES_BEFORE_SKIP) { viewModel.onUpdateClick() }
+
+    viewModel.onSkipClick()
+
+    assertEquals(UpdateUiState.None, viewModel.state.value)
+  }
+
+  @Test
+  fun onSkipClick_doesNothing_whenNoUpdateFailed() {
+    val viewModel = viewModel(FakeUpdateRepository(update = UPDATE))
+
+    viewModel.onSkipClick()
+
+    assertEquals(UpdateUiState.Available(UPDATE), viewModel.state.value)
+  }
 }

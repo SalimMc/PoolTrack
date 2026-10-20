@@ -69,7 +69,27 @@ class PdfFilesLocal(
   }
 
   override suspend fun remove(id: String) {
-    change { it - id }
+    var released: String? = null
+    change { current ->
+      val uri = current[id]
+      val rest = current - id
+      // Several subscriptions can share one file: keep the permission while any still uses it.
+      if (uri != null && uri !in rest.values) released = uri
+      rest
+    }
+    released?.let { releasePermission(it) }
+  }
+
+  /** Gives back the long-lived read permission taken by [keepReadable], so they don't pile up. */
+  private fun releasePermission(uri: String) {
+    try {
+      context.contentResolver.releasePersistableUriPermission(
+          Uri.parse(uri),
+          Intent.FLAG_GRANT_READ_URI_PERMISSION,
+      )
+    } catch (_: SecurityException) {
+      // The permission was not held (any more), so there is nothing to give back.
+    }
   }
 
   override fun keepReadable(uri: String) {

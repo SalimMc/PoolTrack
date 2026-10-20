@@ -40,9 +40,16 @@ class UpdateRequiredScreenTest {
     Locale.setDefault(originalLocale)
   }
 
+  private var skipped = 0
+
   private fun show(state: UpdateUiState) {
     composeTestRule.setContent {
-      UpdateRequiredContent(state, onConfirm = { confirmed++ }, onCancelDownload = { cancelled++ })
+      UpdateRequiredContent(
+          state,
+          onConfirm = { confirmed++ },
+          onCancelDownload = { cancelled++ },
+          onSkip = { skipped++ },
+      )
     }
   }
 
@@ -202,5 +209,22 @@ class UpdateRequiredScreenTest {
   @Test
   fun toPlainNotes_isEmpty_forBlankNotes() {
     assertEquals("", " \n ".toPlainNotes())
+  }
+
+  @Test
+  fun screen_offersNoWayOut_afterTheFirstFailure() {
+    show(UpdateUiState.Failed(UPDATE, "Checksum mismatch", failures = 1))
+
+    assertTagIsGone(UpdateRequiredScreenTestTags.SKIP_BUTTON)
+  }
+
+  @Test
+  fun screen_offersToContinueWithoutUpdating_afterRepeatedFailures() {
+    show(UpdateUiState.Failed(UPDATE, "Checksum mismatch", failures = 3))
+
+    composeTestRule.onNodeWithText("Continue without updating").assertIsDisplayed()
+    composeTestRule.onNodeWithTag(UpdateRequiredScreenTestTags.SKIP_BUTTON).performClick()
+
+    assertEquals(1, skipped)
   }
 }
