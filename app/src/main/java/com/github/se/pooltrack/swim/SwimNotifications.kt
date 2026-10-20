@@ -16,6 +16,8 @@ object SwimNotifications {
   const val REPORT_CHANNEL_ID = "swim_report"
   const val TRACKING_NOTIFICATION_ID = 1
   const val REPORT_NOTIFICATION_ID = 2
+  const val INACTIVITY_CHANNEL_ID = "swim_inactivity"
+  const val INACTIVITY_NOTIFICATION_ID = 3
 
   /** Creates both channels; safe to call repeatedly. */
   fun createChannels(context: Context) {
@@ -32,6 +34,13 @@ object SwimNotifications {
             REPORT_CHANNEL_ID,
             context.getString(R.string.swim_report_channel_name),
             NotificationManager.IMPORTANCE_HIGH,
+        )
+    )
+    manager.createNotificationChannel(
+        NotificationChannel(
+            INACTIVITY_CHANNEL_ID,
+            context.getString(R.string.inactivity_reminder_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT,
         )
     )
   }
@@ -62,6 +71,25 @@ object SwimNotifications {
     context
         .getSystemService(NotificationManager::class.java)
         .notify(REPORT_NOTIFICATION_ID, notification)
+  }
+
+  /**
+   * Posts the "you haven't swum in a while" nudge; tapping it opens the app. Silently dropped if
+   * notifications are not allowed.
+   */
+  fun postInactivityReminder(context: Context) {
+    createChannels(context)
+    val notification =
+        Notification.Builder(context, INACTIVITY_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_swim_notification)
+            .setContentTitle(context.getString(R.string.inactivity_reminder_title))
+            .setContentText(context.getString(R.string.inactivity_reminder_text))
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent(context))
+            .build()
+    context
+        .getSystemService(NotificationManager::class.java)
+        .notify(INACTIVITY_NOTIFICATION_ID, notification)
   }
 
   /** Removes the reminder once it is no longer needed, e.g. the distance was logged in the app. */

@@ -7,12 +7,16 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.testing.WorkManagerTestInitHelper
 import com.github.se.pooltrack.model.auth.AuthRepository
 import com.github.se.pooltrack.model.auth.AuthRepositoryProvider
 import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.entry.EntryRepositoryProvider
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
 import com.github.se.pooltrack.model.update.UpdateRepositoryProvider
+import com.github.se.pooltrack.swim.InactivityReminderWorker
 import com.github.se.pooltrack.ui.account.SignInScreenTestTags
 import com.github.se.pooltrack.ui.navigation.NavigationTestTags
 import com.github.se.pooltrack.ui.poolstay.PoolStayScreenTestTags
@@ -45,6 +49,7 @@ class MainActivityTest {
   @Before
   fun setUp() {
     FirebaseTestApp.ensureInitialized(ApplicationProvider.getApplicationContext())
+    WorkManagerTestInitHelper.initializeTestWorkManager(ApplicationProvider.getApplicationContext())
     originalAuthRepository = AuthRepositoryProvider.repository
     EntryRepositoryProvider.repository = FakeEntryRepository()
     SubscriptionRepositoryProvider.repository = FakeSubscriptionRepository()
@@ -54,6 +59,19 @@ class MainActivityTest {
   @After
   fun tearDown() {
     AuthRepositoryProvider.repository = originalAuthRepository
+  }
+
+  @Test
+  fun onCreate_schedulesTheDailyInactivityReminder() {
+    ActivityScenario.launch(MainActivity::class.java).use {
+      val work =
+          WorkManager.getInstance(ApplicationProvider.getApplicationContext())
+              .getWorkInfosForUniqueWork(InactivityReminderWorker.WORK_NAME)
+              .get()
+
+      assertEquals(1, work.size)
+      assertEquals(WorkInfo.State.ENQUEUED, work.single().state)
+    }
   }
 
   @Test
