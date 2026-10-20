@@ -164,6 +164,23 @@ class SubscriptionRepositoryLocal(
     )
   }
 
+  override suspend fun attachPdf(id: String, uri: String) {
+    val uid = requireUid()
+    // Take a long-lived read permission, so the PDF can still be opened after a restart.
+    context.contentResolver.takePersistableUriPermission(
+        Uri.parse(uri),
+        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+    )
+    context.subscriptionDataStore.edit { prefs ->
+      claimLegacySubscriptions(prefs, uid)
+      prefs[subscriptionsKey(uid)] =
+          Json.encodeToString(
+              readSubscriptions(prefs, uid).map { if (it.id == id) it.copy(uri = uri) else it }
+          )
+    }
+    // Not mirrored: the PDF's URI only means something on this device (see BACKUP_COLLECTION).
+  }
+
   override suspend fun setActiveSubscription(id: String) {
     val uid = requireUid()
     context.subscriptionDataStore.edit { prefs ->

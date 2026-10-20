@@ -499,6 +499,28 @@ class SubscriptionRepositoryLocalTest {
     }
   }
 
+  @Test
+  fun attachPdf_setsTheUri_ofThatSubscriptionOnly() = runTest {
+    val first = repository.addSubscription(pdfUri)
+    val second = repository.addSubscription("content://docs/other.pdf")
+
+    repository.attachPdf(first.id, "content://docs/new.pdf")
+
+    val stored = repository.getSubscriptions().first().associateBy { it.id }
+    assertEquals("content://docs/new.pdf", stored.getValue(first.id).uri)
+    assertEquals("content://docs/other.pdf", stored.getValue(second.id).uri)
+    verify { resolver.takePersistableUriPermission(Uri.parse("content://docs/new.pdf"), any()) }
+  }
+
+  @Test
+  fun attachPdf_doesNothing_forAnUnknownSubscription() = runTest {
+    val subscription = repository.addSubscription(pdfUri)
+
+    repository.attachPdf("missing", "content://docs/new.pdf")
+
+    assertEquals(listOf(subscription), repository.getSubscriptions().first())
+  }
+
   private companion object {
     const val FILE_CLASS =
         "com.github.se.pooltrack.model.subscription.SubscriptionRepositoryLocalKt"

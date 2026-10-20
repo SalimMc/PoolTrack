@@ -50,6 +50,16 @@ interface SubscriptionRepository {
   )
 
   /**
+   * Gives the subscription with [id] a PDF, e.g. one restored from the backup without it. The
+   * implementation keeps the PDF readable across restarts. The subscription's other details and its
+   * entries are left alone. Does nothing if [id] is unknown.
+   *
+   * @param id The identifier of the subscription.
+   * @param uri The content URI of the PDF the user picked, as a string.
+   */
+  suspend fun attachPdf(id: String, uri: String)
+
+  /**
    * Marks the subscription with [id] as the active one, deactivating any other.
    *
    * @param id The identifier of the subscription to activate.
