@@ -13,8 +13,8 @@ rules_version = '2';
 // Collection: users/{userId}/entries
 // Document ID: "<timestampEpochMilli>_<subscriptionId or 'none'>"
 // Fields:
-//   - timestampEpochMilli: int (required, > 0, not in the future) - when the
-//     scanner accepted the scan
+//   - timestampEpochMilli: int (required, year 2000 to now, not in the future) -
+//     when the scanner accepted the scan
 //   - subscriptionId: string | null (required key, <= 64 chars) - the
 //     subscription active at that time, if any
 //   - swimDurationMillis: int | null (optional key, 1..21600000 when set) -
@@ -28,11 +28,11 @@ rules_version = '2';
 // Collection: users/{userId}/subscriptions
 // Document ID: the subscription's id (a UUID)
 // Fields:
-//   - id: string (required, == document ID, immutable)
+//   - id: string (required, == document ID, <= 64 chars, immutable)
 //   - displayName: string (required, 1..500 chars) - the PDF's file name
-//   - addedAtEpochMilli: int (required, > 0, not in the future, immutable)
-//   - expiresAtEpochMilli: int | null (required key, > 0 when set; may be in
-//     the past for an expired subscription)
+//   - addedAtEpochMilli: int (required, year 2000 to now, immutable)
+//   - expiresAtEpochMilli: int | null (required key, year 2000 to 2100 when set;
+//     may be in the past for an expired subscription)
 //   - maxEntries: int | null (required key, 1..100000 when set)
 //   - price: number | null (required key, 0..100000 when set)
 //
@@ -42,8 +42,11 @@ rules_version = '2';
 //   - activeSubscriptionId: string | null (required key, <= 64 chars) - the
 //     subscription that is active, if any
 //
+// Only the owner may touch their own tree, and only signed in with Google may
+// they write: an anonymous account can read (an empty tree) but never write.
 // The users/{userId} document itself is never written, and nothing else is
-// stored. Everything not matched below is denied.
+// stored. Everything not matched below is denied. Rules cannot count documents,
+// so how many a user may create is bounded by a Firebase budget alert instead.
 //
 // ===============================================================
 
@@ -64,16 +67,27 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // The app only signs users in with Google, so only a Google account may change data: an
+    // anonymous account (anyone can create one) can read its own empty tree but never write to it.
+    function isGoogleUser() {
+      return isAuthenticated() && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    // The owner, signed in with Google: the only one who may create, change or remove data.
+    function isOwnerWriter(userId) {
+      return isOwner(userId) && isGoogleUser();
+    }
+
     // Check that the document has exactly these fields, no more and no less.
     function hasExactFields(data, fields) {
       return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
     }
 
-    // An epoch-millisecond timestamp that is not in the future, with one day
-    // of slack for a device clock that is slightly ahead. No lower "recent"
-    // bound: writes made offline are sent later, when the device reconnects.
+    // An epoch-millisecond timestamp from the year 2000 on that is not in the
+    // future, with one day of slack for a device clock that is slightly ahead. No
+    // "recent" bound: writes made offline are sent later, when the device reconnects.
     function isPastEpochMilli(value) {
-      return value is int && value > 0 &&
+      return value is int && value >= 946684800000 &&
         value <= request.time.toMillis() + 86400000;
     }
 
@@ -125,10 +139,12 @@ service cloud.firestore {
           'id', 'displayName', 'addedAtEpochMilli', 'expiresAtEpochMilli',
           'maxEntries', 'price']) &&
         data.id == subscriptionId &&
+        subscriptionId.size() <= 64 &&
         isBoundedString(data.displayName, 500) &&
         isPastEpochMilli(data.addedAtEpochMilli) &&
         (data.expiresAtEpochMilli == null ||
-          (data.expiresAtEpochMilli is int && data.expiresAtEpochMilli > 0)) &&
+          (data.expiresAtEpochMilli is int && data.expiresAtEpochMilli >= 946684800000 &&
+            data.expiresAtEpochMilli <= 4102444800000)) &&
         (data.maxEntries == null ||
           (data.maxEntries is int && data.maxEntries >= 1 && data.maxEntries <= 100000)) &&
         (data.price == null ||
@@ -150,25 +166,28 @@ service cloud.firestore {
       // Only the owner can read, write or remove their own data.
 
       match /entries/{entryId} {
-        allow read, delete: if isOwner(userId);
-        allow create: if isOwner(userId) && isValidEntry(entryId, request.resource.data);
+        allow read: if isOwner(userId);
+        allow delete: if isOwnerWriter(userId);
+        allow create: if isOwnerWriter(userId) && isValidEntry(entryId, request.resource.data);
         // Re-saving an existing entry (set() on the same ID) must keep it valid.
-        allow update: if isOwner(userId) && isValidEntry(entryId, request.resource.data);
+        allow update: if isOwnerWriter(userId) && isValidEntry(entryId, request.resource.data);
       }
 
       match /subscriptions/{subscriptionId} {
-        allow read, delete: if isOwner(userId);
-        allow create: if isOwner(userId) &&
+        allow read: if isOwner(userId);
+        allow delete: if isOwnerWriter(userId);
+        allow create: if isOwnerWriter(userId) &&
           isValidSubscription(subscriptionId, request.resource.data);
-        allow update: if isOwner(userId) &&
+        allow update: if isOwnerWriter(userId) &&
           isValidSubscription(subscriptionId, request.resource.data) &&
           areImmutableFieldsUnchanged(['id', 'addedAtEpochMilli']);
       }
 
       match /settings/{settingId} {
         allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) &&
+        allow create, update: if isOwnerWriter(userId) &&
           isValidSettings(settingId, request.resource.data);
+        allow delete: if isOwnerWriter(userId) && settingId == 'state';
       }
     }
   }

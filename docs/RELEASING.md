@@ -25,12 +25,29 @@ base64 -w0 release.jks   # the value of RELEASE_KEYSTORE
 
 ## Repository secrets
 
-Add these under Settings → Secrets and variables → Actions:
+Add this one under Settings → Secrets and variables → Actions (CI needs it too):
 
 | Secret | Content |
 | --- | --- |
 | `GOOGLE_SERVICES` | `app/google-services.json`, base64-encoded |
+
+## The `release` environment (signing key)
+
+The signing key must only be readable by a release built from `main`. The release job runs in a
+GitHub environment called `release` (created automatically on its first run). Open Settings →
+Environments → `release` and:
+
+1. under **Deployment branches and tags**, choose *Selected branches and tags* and add `main`, so a
+   branch with a modified copy of the workflow that is started by hand can never read the secrets;
+2. optionally add yourself under **Required reviewers**, so every release needs a click;
+3. add these as **environment secrets** there (and delete them from the repository secrets):
+
+| Secret | Content |
+| --- | --- |
 | `RELEASE_KEYSTORE` | the `.jks` keystore, base64-encoded |
 | `RELEASE_KEYSTORE_PASSWORD` | the keystore password |
 | `RELEASE_KEY_ALIAS` | the key alias (`pooltrack` above) |
 | `RELEASE_KEY_PASSWORD` | the key password |
+
+Also turn on two-factor authentication for the GitHub account that owns the repository: whoever
+controls it controls what the in-app updater installs.
