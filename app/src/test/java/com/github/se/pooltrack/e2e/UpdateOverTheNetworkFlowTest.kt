@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
+import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import com.github.se.pooltrack.model.update.HttpResponse
 import com.github.se.pooltrack.model.update.HttpSource
@@ -20,8 +21,10 @@ import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.robolectric.Shadows.shadowOf
 
@@ -106,6 +109,18 @@ class UpdateOverTheNetworkFlowTest : EndToEndTest() {
   private fun waitForTitle(title: String) {
     composeRule.waitUntil(timeoutMillis = 10_000) { titleText() == title }
   }
+
+  // FileProvider caches its path strategy per authority in a static map. Robolectric shares the
+  // JVM between test classes, so the cached cache directory of one test would be wrong in the next.
+  private fun forgetFileProviderPaths() {
+    val cache = FileProvider::class.java.getDeclaredField("sCache")
+    cache.isAccessible = true
+    (cache.get(null) as MutableMap<*, *>).clear()
+  }
+
+  @Before fun freshFileProvider() = forgetFileProviderPaths()
+
+  @After fun leaveNoFileProviderBehind() = forgetFileProviderPaths()
 
   @Test
   fun newerRelease_isDownloadedAndVerified_thenHandedToTheSystemInstaller() {
