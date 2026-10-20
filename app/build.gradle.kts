@@ -162,6 +162,39 @@ tasks.register<JacocoCoverageVerification>("coverageVerification") {
   }
 }
 
+// Human-readable coverage report (HTML + XML) from the same data as coverageVerification. The XML
+// holds the BRANCH counters. Same exclusions as the gate: only generated code.
+tasks.register<JacocoReport>("jacocoTestReport") {
+  group = "verification"
+  description = "Generates the JaCoCo line/branch coverage report of the unit tests."
+  dependsOn("testDebugUnitTest")
+
+  executionData.setFrom(
+      layout.buildDirectory.file(
+          "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec"
+      )
+  )
+  classDirectories.setFrom(
+      fileTree(
+          layout.buildDirectory.dir(
+              "intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"
+          )
+      ) {
+        exclude(
+            "**/R.class",
+            "**/R$*.class",
+            "**/BuildConfig.class",
+            "**/ComposableSingletons*.class",
+        )
+      }
+  )
+  sourceDirectories.setFrom(layout.projectDirectory.dir("src/main/java"))
+  reports {
+    html.required = true
+    xml.required = true
+  }
+}
+
 // Robolectric loads app classes through its own sandbox classloader; without this JaCoCo records
 // nothing for them, and Compose/Robolectric tests would show 0% coverage.
 tasks.withType<Test>().configureEach {
