@@ -77,6 +77,42 @@ class PdfFilesLocalTest {
   }
 
   @Test
+  fun remove_givesBackThePersistedPermission_ofThatPdf() = runTest {
+    pdfFiles.save("a", "content://docs/a.pdf")
+
+    pdfFiles.remove("a")
+
+    verify { resolver.releasePersistableUriPermission(Uri.parse("content://docs/a.pdf"), any()) }
+  }
+
+  @Test
+  fun remove_keepsThePermission_whileAnotherSubscriptionUsesTheSameFile() = runTest {
+    pdfFiles.save("a", "content://docs/shared.pdf")
+    pdfFiles.save("b", "content://docs/shared.pdf")
+
+    pdfFiles.remove("a")
+
+    verify(exactly = 0) { resolver.releasePersistableUriPermission(any(), any()) }
+  }
+
+  @Test
+  fun remove_doesNothing_forASubscriptionWithoutAPdf() = runTest {
+    pdfFiles.remove("missing")
+
+    verify(exactly = 0) { resolver.releasePersistableUriPermission(any(), any()) }
+  }
+
+  @Test
+  fun remove_ignoresAPermissionThatWasAlreadyGone() = runTest {
+    every { resolver.releasePersistableUriPermission(any(), any()) } throws SecurityException()
+    pdfFiles.save("a", "content://docs/a.pdf")
+
+    pdfFiles.remove("a")
+
+    assertEquals(emptyMap<String, String>(), pdfFiles.uris.first())
+  }
+
+  @Test
   fun uris_areKeptPerAccount() = runTest {
     pdfFiles.save("a", "content://docs/a.pdf")
 

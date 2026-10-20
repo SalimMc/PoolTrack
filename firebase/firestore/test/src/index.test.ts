@@ -25,8 +25,12 @@ const subscription = {
 describe('Firestore rules tests', async () => {
   const env = await setup();
 
-  const me = env.authenticatedContext('alice').firestore();
-  const other = env.authenticatedContext('bob').firestore();
+  // The app signs users in with Google only, and the rules let only such accounts write.
+  const google = { firebase: { sign_in_provider: 'google.com' as const } };
+  const me = env.authenticatedContext('alice', google).firestore();
+  const other = env.authenticatedContext('bob', google).firestore();
+  const anonymousAccount = env.authenticatedContext('alice', { firebase: { sign_in_provider: 'anonymous' as const } }).firestore();
+  const noProviderAccount = env.authenticatedContext('alice').firestore();
   const anonymous = env.unauthenticatedContext().firestore();
 
   const myEntry = (id = entryId) => doc(me, `users/alice/entries/${id}`);
@@ -228,6 +232,50 @@ describe('Firestore rules tests', async () => {
     test('An existing entry can be updated with its distance', async () => {
       await assertSucceeds(updateDoc(myEntry(), { swimDistanceMeters: 900, awaitingDistance: false }));
       await assertFails(updateDoc(myEntry(), { swimDistanceMeters: 0 }));
+    });
+  });
+
+  describe('Who may write', () => {
+    test('An anonymous account cannot create, change or delete data', async () => {
+      await assertFails(setDoc(doc(anonymousAccount, `users/alice/entries/${untaggedEntryId}`), untaggedEntry));
+      await assertFails(updateDoc(doc(anonymousAccount, `users/alice/entries/${entryId}`), { swimDurationMillis: 60000 }));
+      await assertFails(deleteDoc(doc(anonymousAccount, `users/alice/entries/${entryId}`)));
+      await assertFails(setDoc(doc(anonymousAccount, `users/alice/subscriptions/${subscriptionId}`), subscription));
+      await assertFails(setDoc(doc(anonymousAccount, 'users/alice/settings/state'), { activeSubscriptionId: null }));
+    });
+
+    test('An account without a sign-in provider cannot write either', async () => {
+      await assertFails(setDoc(doc(noProviderAccount, `users/alice/entries/${untaggedEntryId}`), untaggedEntry));
+    });
+
+    test('An anonymous account can still read its own data', async () => {
+      await assertSucceeds(getDoc(doc(anonymousAccount, `users/alice/entries/${entryId}`)));
+    });
+  });
+
+  describe('Limits', () => {
+    test('Timestamps before the year 2000 are refused', async () => {
+      await assertFails(setDoc(myEntry('1_none'), { timestampEpochMilli: 1, subscriptionId: null }));
+      await assertFails(setDoc(mySubscription(), { ...subscription, addedAtEpochMilli: 1 }));
+    });
+
+    test('Expirations beyond the year 2100 are refused', async () => {
+      await assertFails(setDoc(mySubscription(), { ...subscription, expiresAtEpochMilli: 4102444800001 }));
+      await assertSucceeds(setDoc(mySubscription(), { ...subscription, expiresAtEpochMilli: 4102444800000 }));
+    });
+
+    test('A subscription id longer than 64 characters is refused', async () => {
+      const longId = 'a'.repeat(65);
+      await assertFails(setDoc(mySubscription(longId), { ...subscription, id: longId }));
+      const maxId = 'a'.repeat(64);
+      await assertSucceeds(setDoc(mySubscription(maxId), { ...subscription, id: maxId }));
+    });
+
+    test('Users can delete their active-subscription setting', async () => {
+      await env.withSecurityRulesDisabled(async ctx => {
+        await setDoc(doc(ctx.firestore(), 'users/alice/settings/state'), { activeSubscriptionId: subscriptionId });
+      });
+      await assertSucceeds(deleteDoc(doc(me, 'users/alice/settings/state')));
     });
   });
 

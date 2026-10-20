@@ -1,0 +1,14 @@
+# Keeps the dependencies and the pinned GitHub Actions up to date, so a known vulnerability in one
+# of them shows up as a pull request instead of going unnoticed.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

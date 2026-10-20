@@ -39,10 +39,12 @@ private val json = Json { ignoreUnknownKeys = true }
  */
 class UpdateRepositoryGithub(
     context: Context,
-    private val http: HttpSource = UrlConnectionSource,
+    private val http: HttpSource = UrlConnectionSource(),
     private val latestReleaseUrl: String = LATEST_RELEASE_URL,
     private val trustedUrlPrefix: String = TRUSTED_DOWNLOAD_PREFIX,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val maxReleaseJsonBytes: Long = MAX_RELEASE_JSON_BYTES,
+    private val maxApkBytes: Long = MAX_APK_BYTES,
 ) : UpdateRepository {
 
   private val context = context.applicationContext
@@ -50,7 +52,8 @@ class UpdateRepositoryGithub(
   override suspend fun checkForUpdate(currentVersion: String): AppUpdate? =
       withContext(ioDispatcher) {
         try {
-          val text = http.open(latestReleaseUrl).use { it.body.bufferedReader().readText() }
+          val text =
+              http.open(latestReleaseUrl).use { it.body.readTextLimited(maxReleaseJsonBytes) }
           json.decodeFromString<GithubRelease>(text).toAppUpdate(trustedUrlPrefix)?.takeIf {
             isNewerVersion(it.version, currentVersion)
           }
@@ -76,6 +79,7 @@ class UpdateRepositoryGithub(
       var lastPercent = -1
       http.open(update.apkUrl).use { response ->
         val total = if (response.contentLength > 0) response.contentLength else update.sizeBytes
+        if (total > maxApkBytes) throw IOException("Update is larger than $maxApkBytes bytes")
         apk.outputStream().use { out ->
           val buffer = ByteArray(BUFFER_SIZE)
           while (true) {
@@ -85,6 +89,7 @@ class UpdateRepositoryGithub(
             out.write(buffer, 0, read)
             digest.update(buffer, 0, read)
             written += read
+            if (written > maxApkBytes) throw IOException("Update is larger than $maxApkBytes bytes")
             if (total > 0) {
               val percent = (written * PERCENT / total).toInt().coerceAtMost(PERCENT)
               if (percent != lastPercent) {
@@ -141,5 +146,11 @@ class UpdateRepositoryGithub(
     }
   }
 }
+
+/** The release description is a few kilobytes; anything above this is not a release. */
+internal const val MAX_RELEASE_JSON_BYTES = 1_000_000L
+
+/** The app is a few megabytes; anything far above this is not an update. */
+internal const val MAX_APK_BYTES = 100L * 1024 * 1024
 
 private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
