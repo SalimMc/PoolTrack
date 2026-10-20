@@ -6,4 +6,7 @@
     <string name="swim_report_channel_name">Swim distance reminder</string>
     <string name="swim_report_title">Log how far you swam</string>
     <string name="swim_report_text">Tap to log the distance of your swim.</string>
+    <string name="inactivity_reminder_channel_name">Swim reminders</string>
+    <string name="inactivity_reminder_title">Time for a swim?</string>
+    <string name="inactivity_reminder_text">You haven\'t been to the pool for a while.</string>
 </resources>
