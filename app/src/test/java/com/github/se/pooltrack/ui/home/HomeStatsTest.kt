@@ -68,6 +68,10 @@ class HomeStatsTest {
             averageEntriesPerWeek = 1.0,
             // Two Mondays, one Wednesday, one Sunday.
             favoriteDayOfWeek = DayOfWeek.MONDAY,
+            currentStreakWeeks = 2,
+            longestStreakWeeks = 2,
+            bestWeekEntries = 2,
+            weeklyCounts = listOf(0, 0, 0, 0, 1, 0, 1, 2),
         ),
         computeHomeStats(allEntries, now, zone),
     )
@@ -98,5 +102,41 @@ class HomeStatsTest {
         )
 
     assertEquals(0L, stats.daysSinceLastSwim)
+  }
+
+  @Test
+  fun computeHomeStats_computesStreaksBestWeekAndWeeklyCounts() {
+    val stats = computeHomeStats(allEntries, now, zone)
+
+    // Weeks of 31 Aug, 14 Sep (Sunday the 20th) and 21 Sep have entries; 7 Sep is empty.
+    assertEquals(2, stats.currentStreakWeeks)
+    assertEquals(2, stats.longestStreakWeeks)
+    assertEquals(2, stats.bestWeekEntries)
+    assertEquals(listOf(0, 0, 0, 0, 1, 0, 1, 2), stats.weeklyCounts)
+  }
+
+  @Test
+  fun computeHomeStats_keepsStreakAlive_whenOnlyThisWeekIsEmpty() {
+    val stats =
+        computeHomeStats(
+            listOf(entryAt("2026-09-15T10:00:00Z"), entryAt("2026-09-08T10:00:00Z")),
+            now,
+            zone,
+        )
+
+    assertEquals(2, stats.currentStreakWeeks)
+  }
+
+  @Test
+  fun computeHomeStats_resetsCurrentStreak_whenAWeekIsMissed() {
+    val stats =
+        computeHomeStats(
+            listOf(entryAt("2026-09-01T10:00:00Z"), entryAt("2026-09-08T10:00:00Z")),
+            now,
+            zone,
+        )
+
+    assertEquals(0, stats.currentStreakWeeks)
+    assertEquals(2, stats.longestStreakWeeks)
   }
 }
