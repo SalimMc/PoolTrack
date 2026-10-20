@@ -25,6 +25,10 @@ jobs:
   release:
     name: Build and publish the APK
     runs-on: ubuntu-latest
+    # The signing secrets belong to this environment. Restrict it to the main branch (and ask for a
+    # reviewer) in Settings > Environments > release, so that a branch with a modified copy of this
+    # workflow, started by hand, can never read them. See docs/RELEASING.md.
+    environment: release
     # Only after CI passed on a push to main in this repository: never for pull requests, which
     # include fork branches that happen to be named main.
     if: >-
