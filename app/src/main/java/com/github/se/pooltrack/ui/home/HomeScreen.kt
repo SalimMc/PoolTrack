@@ -7,24 +7,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AddCircle
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -84,6 +87,9 @@ object HomeScreenTestTags {
   const val NO_SUBSCRIPTION_TODO = "HomeScreenNoSubscriptionTodo"
   const val TOTAL_SPENT_STAT = "HomeScreenTotalSpentStat"
   const val COST_PER_ENTRY_STAT = "HomeScreenCostPerEntryStat"
+  const val STREAK_STAT = "HomeScreenStreakStat"
+  const val BEST_WEEK_STAT = "HomeScreenBestWeekStat"
+  const val WEEKLY_CHART = "HomeScreenWeeklyChart"
   const val OPEN_SUBSCRIPTION_FAB = "HomeScreenOpenSubscriptionFab"
 }
 
@@ -147,7 +153,7 @@ fun HomeScreen(
                 else contentColorFor(FloatingActionButtonDefaults.containerColor),
             modifier = Modifier.testTag(HomeScreenTestTags.OPEN_SUBSCRIPTION_FAB),
         ) {
-          Icon(Icons.Filled.Person, contentDescription = "Open subscription")
+          Icon(QrCodeIcon, contentDescription = "Open subscription")
         }
       },
   ) { paddingValues ->
@@ -214,6 +220,28 @@ fun HomeScreen(
             modifier = Modifier.weight(1f).testTag(HomeScreenTestTags.AVERAGE_PER_WEEK_STAT),
         )
       }
+      Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        StatTile(
+            icon = Icons.Outlined.Refresh,
+            label = "Week streak",
+            value = streakLabel(stats.currentStreakWeeks),
+            accentColor = MaterialTheme.colorScheme.secondary,
+            onAccentColor = MaterialTheme.colorScheme.onSecondary,
+            modifier = Modifier.weight(1f).testTag(HomeScreenTestTags.STREAK_STAT),
+        )
+        StatTile(
+            icon = Icons.Filled.Star,
+            label = "Best week",
+            value = if (stats.bestWeekEntries == 0) "-" else "${stats.bestWeekEntries}",
+            accentColor = MaterialTheme.colorScheme.tertiary,
+            onAccentColor = MaterialTheme.colorScheme.onTertiary,
+            modifier = Modifier.weight(1f).testTag(HomeScreenTestTags.BEST_WEEK_STAT),
+        )
+      }
+      WeeklyChartCard(
+          counts = stats.weeklyCounts,
+          modifier = Modifier.testTag(HomeScreenTestTags.WEEKLY_CHART),
+      )
       Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         StatTile(
             icon = Icons.Outlined.ShoppingCart,
@@ -441,6 +469,63 @@ private fun amountLabel(amount: Double?): String =
 private fun averagePerWeekLabel(averageEntriesPerWeek: Double?): String =
     if (averageEntriesPerWeek == null) "-"
     else String.format(Locale.getDefault(), "%.1f", averageEntriesPerWeek)
+
+private fun streakLabel(weeks: Int): String =
+    when (weeks) {
+      0 -> "-"
+      1 -> "1 week"
+      else -> "$weeks weeks"
+    }
+
+/** A small bar chart of entries per week over the last [RECENT_WEEKS] weeks. */
+@Composable
+private fun WeeklyChartCard(counts: List<Int>, modifier: Modifier = Modifier) {
+  val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
+  Card(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+      Text(
+          text = "Last $RECENT_WEEKS weeks",
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.Bold,
+      )
+      Row(
+          modifier = Modifier.fillMaxWidth().height(96.dp).padding(top = 12.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.Bottom,
+      ) {
+        counts.forEachIndexed { index, count ->
+          val isCurrent = index == counts.lastIndex
+          Column(
+              modifier = Modifier.weight(1f).fillMaxHeight(),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Bottom,
+          ) {
+            Text(
+                text = if (count > 0) "$count" else "",
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Box(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .fillMaxHeight(0.8f * count / maxCount)
+                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                        .background(
+                            if (isCurrent) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                        )
+            )
+            Box(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .height(2.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+          }
+        }
+      }
+    }
+  }
+}
 
 @Composable
 private fun StatTile(
