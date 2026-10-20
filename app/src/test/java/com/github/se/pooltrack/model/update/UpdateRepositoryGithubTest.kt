@@ -52,7 +52,8 @@ class UpdateRepositoryGithubTest {
     val json =
         """
         {"tag_name":"$tag","prerelease":$prerelease,"draft":false,"body":"Faster start",
-         "assets":[{"name":"app.apk","browser_download_url":"$apkUrl","size":42,"digest":null}]}
+         "assets":[{"name":"app.apk","browser_download_url":"$apkUrl","size":42,
+                    "digest":"sha256:${sha256(apkBytes)}"}]}
         """
             .trimIndent()
     serve(apiUrl, json.toByteArray())
@@ -70,7 +71,7 @@ class UpdateRepositoryGithubTest {
     serveRelease(tag = "v1.2.0")
 
     assertEquals(
-        AppUpdate("1.2.0", "Faster start", apkUrl, sizeBytes = 42, sha256 = null),
+        AppUpdate("1.2.0", "Faster start", apkUrl, sizeBytes = 42, sha256 = sha256(apkBytes)),
         repository.checkForUpdate("1.1.0"),
     )
   }
@@ -101,6 +102,30 @@ class UpdateRepositoryGithubTest {
     routes[apiUrl] = { throw IOException("offline") }
 
     assertNull(repository.checkForUpdate("1.1.0"))
+  }
+
+  @Test
+  fun checkForUpdate_returnsNull_whenTheReleaseHasNoChecksum() = runTest {
+    serve(
+        apiUrl,
+        """
+        {"tag_name":"v1.2.0","assets":[{"name":"app.apk","browser_download_url":"$apkUrl",
+         "size":42,"digest":null}]}
+        """
+            .trimIndent()
+            .toByteArray(),
+    )
+
+    assertNull(repository.checkForUpdate("1.1.0"))
+  }
+
+  @Test
+  fun checkForUpdate_returnsNull_whenTheResponseIsTooLarge() = runTest {
+    serveRelease()
+    val small =
+        UpdateRepositoryGithub(context, http, apiUrl, prefix, UnconfinedTestDispatcher(), 20)
+
+    assertNull(small.checkForUpdate("1.1.0"))
   }
 
   @Test
@@ -174,6 +199,45 @@ class UpdateRepositoryGithubTest {
 
     assertTrue(error.exceptionOrNull() is IOException)
     assertFalse(File(updatesDir(), "PoolTrack-1.2.0.apk").exists())
+  }
+
+  @Test
+  fun download_fails_whenTheServerAnnouncesTooLargeAFile() = runTest {
+    serve(apkUrl, apkBytes)
+    val small =
+        UpdateRepositoryGithub(
+            context,
+            http,
+            apiUrl,
+            prefix,
+            UnconfinedTestDispatcher(),
+            maxApkBytes = 1_000,
+        )
+
+    val error = runCatching { small.download(update).toList() }
+
+    assertEquals("Update is larger than 1000 bytes", error.exceptionOrNull()?.message)
+    assertEquals(emptyList<File>(), updatesDir().listFiles()?.toList())
+  }
+
+  @Test
+  fun download_stops_whenTheStreamIsLargerThanItClaimed() = runTest {
+    // No length is announced and the release lists none either, so only the stream can tell.
+    serve(apkUrl, apkBytes, contentLength = -1)
+    val small =
+        UpdateRepositoryGithub(
+            context,
+            http,
+            apiUrl,
+            prefix,
+            UnconfinedTestDispatcher(),
+            maxApkBytes = 1_000,
+        )
+
+    val error = runCatching { small.download(update.copy(sizeBytes = 0)).toList() }
+
+    assertEquals("Update is larger than 1000 bytes", error.exceptionOrNull()?.message)
+    assertEquals(emptyList<File>(), updatesDir().listFiles()?.toList())
   }
 
   @Test

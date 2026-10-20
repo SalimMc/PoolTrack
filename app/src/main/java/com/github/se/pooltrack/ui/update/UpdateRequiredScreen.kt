@@ -34,6 +34,7 @@ object UpdateRequiredScreenTestTags {
   const val MESSAGE = "UpdateRequiredMessage"
   const val CONFIRM_BUTTON = "UpdateRequiredConfirmButton"
   const val CANCEL_BUTTON = "UpdateRequiredCancelButton"
+  const val SKIP_BUTTON = "UpdateRequiredSkipButton"
 }
 
 private const val BYTES_PER_MB = 1024.0 * 1024.0
@@ -41,8 +42,9 @@ private const val PERCENT = 100
 
 /**
  * Shown instead of the whole app while a newer release exists: the user must install it before
- * using PoolTrack, so there is no way to skip it. It guides them through the download and the
- * installation. `PoolTrackApp` decides when to show it.
+ * using PoolTrack. It guides them through the download and the installation, and only after the
+ * update failed several times does it offer to continue without it (until the next launch).
+ * `PoolTrackApp` decides when to show it.
  */
 @Composable
 fun UpdateRequiredScreen(viewModel: UpdateViewModel = viewModel()) {
@@ -54,6 +56,7 @@ fun UpdateRequiredScreen(viewModel: UpdateViewModel = viewModel()) {
         else viewModel.onUpdateClick()
       },
       onCancelDownload = viewModel::onCancelDownload,
+      onSkip = viewModel::onSkipClick,
   )
 }
 
@@ -63,6 +66,7 @@ fun UpdateRequiredContent(
     state: UpdateUiState,
     onConfirm: () -> Unit,
     onCancelDownload: () -> Unit,
+    onSkip: () -> Unit = {},
 ) {
   when (state) {
     UpdateUiState.None -> Unit
@@ -93,8 +97,18 @@ fun UpdateRequiredContent(
           )
         }
     is UpdateUiState.Failed ->
-        Screen(title = "Update failed", confirmText = "Retry", onConfirm = onConfirm) {
+        Screen(
+            title = "Update failed",
+            confirmText = "Retry",
+            onConfirm = onConfirm,
+            cancelText = if (state.canSkip) "Continue without updating" else null,
+            onCancel = onSkip,
+            cancelTag = UpdateRequiredScreenTestTags.SKIP_BUTTON,
+        ) {
           Message(state.message)
+          if (state.canSkip) {
+            Message("You can use PoolTrack now. The update is offered again next time you open it.")
+          }
         }
   }
 }
@@ -106,6 +120,7 @@ private fun Screen(
     onConfirm: () -> Unit,
     cancelText: String? = null,
     onCancel: () -> Unit = {},
+    cancelTag: String = UpdateRequiredScreenTestTags.CANCEL_BUTTON,
     content: @Composable () -> Unit,
 ) {
   Column(
@@ -130,7 +145,7 @@ private fun Screen(
     if (cancelText != null) {
       TextButton(
           onClick = onCancel,
-          modifier = Modifier.testTag(UpdateRequiredScreenTestTags.CANCEL_BUTTON),
+          modifier = Modifier.testTag(cancelTag),
       ) {
         Text(cancelText)
       }
