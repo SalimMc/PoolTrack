@@ -38,11 +38,11 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) :
 
   companion object {
     const val WORK_NAME = "update_check"
-    const val CHECK_INTERVAL_HOURS = 12L
+    const val CHECK_INTERVAL_HOURS = 6L
     private const val PREFERENCES = "update_check"
     private const val KEY_NOTIFIED_VERSION = "notified_version"
 
-    /** Schedules the periodic check; does nothing if it already is. */
+    /** Schedules the periodic check; replaces an older schedule so a changed interval applies. */
     fun schedule(context: Context) {
       val request =
           PeriodicWorkRequestBuilder<UpdateCheckWorker>(CHECK_INTERVAL_HOURS, TimeUnit.HOURS)
@@ -51,7 +51,7 @@ class UpdateCheckWorker(context: Context, params: WorkerParameters) :
               )
               .build()
       WorkManager.getInstance(context)
-          .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+          .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
   }
 }
