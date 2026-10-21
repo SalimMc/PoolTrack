@@ -32,6 +32,7 @@ import com.github.se.pooltrack.model.subscription.PassZoomRepositoryProvider
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
 import com.github.se.pooltrack.model.swim.isSwimPending
 import com.github.se.pooltrack.model.update.UpdateRepositoryProvider
+import com.github.se.pooltrack.model.usage.UsageRepositoryProvider
 import com.github.se.pooltrack.swim.InactivityReminderWorker
 import com.github.se.pooltrack.swim.SwimNotifications
 import com.github.se.pooltrack.swim.SwimTrackingService
@@ -75,6 +76,12 @@ class MainActivity : ComponentActivity() {
     InactivityReminderWorker.schedule(this)
     UpdateCheckWorker.schedule(this)
     lifecycleScope.launch { migrateLocalDataOfSignedInAccounts(this@MainActivity) }
+    // Only a fresh launch counts as an open, not the activity being recreated by a rotation.
+    if (savedInstanceState == null) {
+      lifecycleScope.launch {
+        UsageRepositoryProvider.repository.recordOpen(BuildConfig.VERSION_NAME)
+      }
+    }
 
     setContent { PoolTrackTheme { Surface(modifier = Modifier.fillMaxSize()) { PoolTrackApp() } } }
   }
