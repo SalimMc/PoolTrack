@@ -8,13 +8,13 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.time.temporal.WeekFields
-import java.util.Locale
 
 /**
  * Summary statistics derived from the confirmed entries.
  *
  * @property totalEntries How many entries were ever confirmed.
- * @property entriesThisWeek How many entries fall within the current calendar week.
+ * @property entriesThisWeek How many entries fall within the current calendar week (Monday to
+ *   Sunday).
  * @property entriesThisMonth How many entries fall within the current calendar month.
  * @property daysSinceLastSwim Whole days since the most recent entry, or `null` if there is none.
  * @property averageEntriesPerWeek Entries per calendar week since the first one, or `null` if there
@@ -51,7 +51,8 @@ fun computeHomeStats(
     zone: ZoneId = ZoneId.systemDefault(),
 ): HomeStats {
   val today = now.atZone(zone).toLocalDate()
-  val weekFields = WeekFields.of(Locale.getDefault())
+  // Weeks always start on Monday, like in History, whatever the phone's locale says.
+  val weekFields = WeekFields.ISO
   val startOfWeek = today.with(weekFields.dayOfWeek(), 1L)
   val startOfWeekInstant = startOfWeek.atStartOfDay(zone).toInstant()
   val thisMonth = YearMonth.from(today)

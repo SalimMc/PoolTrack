@@ -78,10 +78,21 @@ class HomeStatsTest {
   }
 
   @Test
-  fun computeHomeStats_startsTheWeekOnSunday_whenTheLocaleDoes() {
+  fun computeHomeStats_startsTheWeekOnMonday_evenWithAUsLocale() {
     Locale.setDefault(Locale.US)
 
-    assertEquals(3, computeHomeStats(allEntries, now, zone).entriesThisWeek)
+    // Sunday the 20th belongs to the previous week, as in History: only Monday and Wednesday count.
+    assertEquals(2, computeHomeStats(allEntries, now, zone).entriesThisWeek)
+  }
+
+  @Test
+  fun computeHomeStats_countsStreaksInMondayWeeks_evenWithAUsLocale() {
+    Locale.setDefault(Locale.US)
+
+    val stats = computeHomeStats(allEntries, now, zone)
+
+    assertEquals(2, stats.currentStreakWeeks)
+    assertEquals(listOf(0, 0, 0, 0, 1, 0, 1, 2), stats.weeklyCounts)
   }
 
   @Test
