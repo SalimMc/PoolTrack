@@ -1,6 +1,6 @@
 import { describe, test, afterAll, beforeEach } from 'vitest';
 import { assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, setDoc, updateDoc } from 'firebase/firestore';
 import { setup } from './setup.js';
 
 // Documents shaped exactly like the ones the app writes (see FirestoreBackup.kt and the
@@ -120,7 +120,7 @@ describe('Firestore rules tests', async () => {
       await assertFails(getDocs(collection(me, 'users')));
     });
 
-    test('Users cannot write their users/{uid} document or other collections', async () => {
+    test('Users cannot write arbitrary fields on their users/{uid} document or other collections', async () => {
       await assertFails(setDoc(doc(me, 'users/alice'), { isAdmin: true }));
       await assertFails(setDoc(doc(me, 'users/alice/notes/x'), { text: 'hi' }));
       await assertFails(setDoc(doc(me, 'somethingElse/x'), { text: 'hi' }));
@@ -250,6 +250,64 @@ describe('Firestore rules tests', async () => {
 
     test('An anonymous account can still read its own data', async () => {
       await assertSucceeds(getDoc(doc(anonymousAccount, `users/alice/entries/${entryId}`)));
+    });
+  });
+
+  describe('Usage figures', () => {
+    const myUser = () => doc(me, 'users/alice');
+    // What UsageRepositoryFirestore writes on every launch.
+    const opened = (version = '1.10.1') => ({
+      lastOpenedAtEpochMilli: Date.now(), appVersion: version, openCount: increment(1),
+    });
+    const storedUsage = { lastOpenedAtEpochMilli: now, appVersion: '1.10.0', openCount: 4 };
+
+    test('The first launch creates the document with a count of one', async () => {
+      await assertSucceeds(setDoc(myUser(), opened(), { merge: true }));
+      const snapshot = await assertSucceeds(getDoc(myUser()));
+      if (snapshot.data()?.['openCount'] !== 1) throw new Error('expected an open count of 1');
+    });
+
+    test('Every later launch adds one to the count', async () => {
+      await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'users/alice'), storedUsage));
+      await assertSucceeds(setDoc(myUser(), opened(), { merge: true }));
+      const snapshot = await assertSucceeds(getDoc(myUser()));
+      if (snapshot.data()?.['openCount'] !== 5) throw new Error('expected an open count of 5');
+    });
+
+    test('The count cannot be set, reset or raised by more than one', async () => {
+      await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'users/alice'), storedUsage));
+      await assertFails(setDoc(myUser(), { ...storedUsage, openCount: 1 }));
+      await assertFails(setDoc(myUser(), { ...storedUsage, openCount: 100 }));
+      await assertFails(setDoc(myUser(), { ...opened(), openCount: increment(2) }, { merge: true }));
+      await assertFails(setDoc(myUser(), { ...storedUsage, openCount: 1000000 }));
+    });
+
+    test('A first launch cannot start the count above one', async () => {
+      await assertFails(setDoc(myUser(), { ...storedUsage, openCount: 50 }));
+    });
+
+    test('The figures are validated', async () => {
+      await assertFails(setDoc(myUser(), { ...opened(), lastOpenedAtEpochMilli: Date.now() + 10 * 24 * 3600 * 1000 }, { merge: true }));
+      await assertFails(setDoc(myUser(), { ...opened(), lastOpenedAtEpochMilli: 'yesterday' }, { merge: true }));
+      await assertFails(setDoc(myUser(), opened(''), { merge: true }));
+      await assertFails(setDoc(myUser(), opened('x'.repeat(33)), { merge: true }));
+      await assertFails(setDoc(myUser(), { ...opened(), isAdmin: true }, { merge: true }));
+    });
+
+    test('An anonymous account cannot record usage', async () => {
+      await assertFails(setDoc(doc(anonymousAccount, 'users/alice'), opened(), { merge: true }));
+    });
+
+    test("Users cannot read or write another user's figures", async () => {
+      await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'users/alice'), storedUsage));
+      await assertFails(getDoc(doc(other, 'users/alice')));
+      await assertFails(setDoc(doc(other, 'users/alice'), opened(), { merge: true }));
+    });
+
+    test('Users can read their own figures but not delete them', async () => {
+      await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'users/alice'), storedUsage));
+      await assertSucceeds(getDoc(myUser()));
+      await assertFails(deleteDoc(myUser()));
     });
   });
 
