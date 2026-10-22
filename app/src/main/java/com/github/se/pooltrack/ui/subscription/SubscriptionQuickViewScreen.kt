@@ -53,7 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
+import com.github.se.pooltrack.model.subscription.loadPassImage
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.Screen
 import com.github.se.pooltrack.ui.navigation.TopNavigationMenu
@@ -194,7 +194,7 @@ private fun PassDisplayAndAccept(
   DisposableEffect(zoomViewModel) { onDispose { zoomViewModel.persistNow() } }
 
   LaunchedEffect(uri) {
-    pageBitmap = withContext(Dispatchers.IO) { renderFirstPdfPage(context, Uri.parse(uri)) }
+    pageBitmap = withContext(Dispatchers.IO) { loadPassImage(context, Uri.parse(uri)) }
   }
 
   Column(modifier = modifier.fillMaxSize()) {

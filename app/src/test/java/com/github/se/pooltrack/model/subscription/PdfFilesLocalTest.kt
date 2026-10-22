@@ -10,11 +10,16 @@ import com.github.se.pooltrack.model.clearPreferencesDataStore
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.io.ByteArrayInputStream
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -39,7 +44,77 @@ class PdfFilesLocalTest {
         "pdfFilesDataStore",
     )
     resolver = mockk(relaxed = true)
+    // A relaxed mock would hand out an endless empty stream, which a copy would never finish.
+    every { resolver.openInputStream(any()) } returns null
     pdfFiles = PdfFilesLocal(ResolverContext(appContext, resolver), currentUid)
+  }
+
+  private fun serve(uri: String, content: String) {
+    every { resolver.openInputStream(Uri.parse(uri)) } answers
+        {
+          ByteArrayInputStream(content.toByteArray())
+        }
+  }
+
+  private fun fileOf(uri: String) = File(requireNotNull(Uri.parse(uri).path))
+
+  @Test
+  fun save_copiesThePdfIntoAppStorage() = runTest {
+    serve("content://docs/a.pdf", "pdf-bytes")
+
+    pdfFiles.save("a", "content://docs/a.pdf")
+
+    val stored = pdfFiles.uris.first().getValue("a")
+    assertTrue(stored.startsWith("file:"))
+    assertTrue(fileOf(stored).absolutePath.startsWith(appContext.filesDir.absolutePath))
+    assertEquals("pdf-bytes", fileOf(stored).readText())
+  }
+
+  @Test
+  fun save_keepsTheOriginalLink_whenThePdfCannotBeCopied() = runTest {
+    every { resolver.openInputStream(any()) } returns null
+
+    pdfFiles.save("a", "content://docs/a.pdf")
+
+    assertEquals(mapOf("a" to "content://docs/a.pdf"), pdfFiles.uris.first())
+  }
+
+  @Test
+  fun save_deletesTheOldCopy_whenThePdfIsReplaced() = runTest {
+    serve("content://docs/old.pdf", "old")
+    serve("content://docs/new.pdf", "new")
+    pdfFiles.save("a", "content://docs/old.pdf")
+    val old = fileOf(pdfFiles.uris.first().getValue("a"))
+
+    pdfFiles.save("a", "content://docs/new.pdf")
+
+    assertFalse(old.exists())
+    assertEquals("new", fileOf(pdfFiles.uris.first().getValue("a")).readText())
+  }
+
+  @Test
+  fun remove_deletesTheCopy() = runTest {
+    serve("content://docs/a.pdf", "pdf-bytes")
+    pdfFiles.save("a", "content://docs/a.pdf")
+    val copy = fileOf(pdfFiles.uris.first().getValue("a"))
+
+    pdfFiles.remove("a")
+
+    assertFalse(copy.exists())
+    assertNull(pdfFiles.uris.first()["a"])
+  }
+
+  @Test
+  fun uris_copiesAPdfThatIsStillLinkedToItsOriginalFile() = runTest {
+    every { resolver.openInputStream(any()) } returns null
+    pdfFiles.save("a", "content://docs/a.pdf")
+    serve("content://docs/a.pdf", "late-copy")
+
+    pdfFiles.uris.first() // Reading them is what copies the PDF.
+    val stored = pdfFiles.uris.first().getValue("a")
+
+    assertTrue(stored.startsWith("file:"))
+    assertEquals("late-copy", fileOf(stored).readText())
   }
 
   @Test
