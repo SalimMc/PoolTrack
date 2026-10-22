@@ -12,7 +12,7 @@ plugins {
 // The single place to bump the version. Android only installs an update whose versionCode is higher
 // than the installed one, and the in-app updater compares versionName with the GitHub release tag
 // (v<versionName>), so versionCode is derived from it: 1.2.3 -> 10203.
-val appVersionName = "1.11.0"
+val appVersionName = "1.12.0"
 
 fun versionCodeOf(versionName: String): Int {
   val (major, minor, patch) = versionName.split('.').map(String::toInt)
