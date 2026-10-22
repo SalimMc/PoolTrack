@@ -4,6 +4,7 @@ import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.entry.timestamp
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
@@ -27,6 +28,7 @@ import java.time.temporal.WeekFields
  * @property bestWeekEntries The most entries logged in a single calendar week.
  * @property weeklyCounts Entries per calendar week for the last [RECENT_WEEKS] weeks, oldest first
  *   (the last item is the current week).
+ * @property weekStarts The Monday each of the [weeklyCounts] weeks starts on, in the same order.
  */
 data class HomeStats(
     val totalEntries: Int,
@@ -39,6 +41,7 @@ data class HomeStats(
     val longestStreakWeeks: Int = 0,
     val bestWeekEntries: Int = 0,
     val weeklyCounts: List<Int> = List(RECENT_WEEKS) { 0 },
+    val weekStarts: List<LocalDate> = emptyList(),
 )
 
 /** How many weeks the [HomeStats.weeklyCounts] chart covers. */
@@ -86,10 +89,8 @@ fun computeHomeStats(
     currentStreak++
     streakWeek = streakWeek.minusWeeks(1)
   }
-  val weeklyCounts =
-      (RECENT_WEEKS - 1 downTo 0).map { weeksAgo ->
-        entriesPerWeek[startOfWeek.minusWeeks(weeksAgo.toLong())] ?: 0
-      }
+  val recentWeekStarts = (RECENT_WEEKS - 1 downTo 0).map { startOfWeek.minusWeeks(it.toLong()) }
+  val weeklyCounts = recentWeekStarts.map { entriesPerWeek[it] ?: 0 }
 
   return HomeStats(
       totalEntries = entries.size,
@@ -102,5 +103,6 @@ fun computeHomeStats(
       longestStreakWeeks = longestStreak,
       bestWeekEntries = entriesPerWeek.values.maxOrNull() ?: 0,
       weeklyCounts = weeklyCounts,
+      weekStarts = recentWeekStarts,
   )
 }
