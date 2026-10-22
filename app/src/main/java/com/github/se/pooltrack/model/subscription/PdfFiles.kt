@@ -12,6 +12,7 @@ import java.io.IOException
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -99,8 +100,8 @@ class PdfFilesLocal(
         current + (id to stored)
       }
     } catch (e: Throwable) {
-      // Nothing points to the copy, so it would stay in the storage for good.
-      copy?.let { deleteCopy(it) }
+      // If nothing points to the copy it would stay in the storage for good.
+      copy?.let { deleteIfUnlinked(it) }
       throw e
     }
     replaced?.takeIf { it != stored }?.let { deleteCopy(it) }
@@ -136,7 +137,7 @@ class PdfFilesLocal(
             if (swapped) current + (id to copy) else current
           }
         } catch (e: Throwable) {
-          deleteCopy(copy)
+          deleteIfUnlinked(copy)
           throw e
         }
         if (!swapped) deleteCopy(copy)
@@ -166,6 +167,16 @@ class PdfFilesLocal(
           // A failed or cancelled copy leaves a partial file that nothing points to.
           if (!copied) target.delete()
         }
+      }
+
+  /**
+   * Deletes the copy at [uri] unless a subscription points to it. A failure or cancellation can
+   * arrive after the link was recorded, and the copy must then stay.
+   */
+  private suspend fun deleteIfUnlinked(uri: String) =
+      withContext(NonCancellable) {
+        val uid = currentUid.first()
+        if (uid == null || uri !in storedUris(uid).first().values) deleteCopy(uri)
       }
 
   /** Deletes the file at [uri] if it is one of the copies made by [copyIntoAppStorage]. */

@@ -14,6 +14,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -128,7 +129,8 @@ class PdfFilesLocalTest {
     every { resolver.openInputStream(any()) } returns
         object : InputStream() {
           override fun read(): Int {
-            release.await()
+            // Bounded, so a mistake here costs seconds instead of hanging the whole test run.
+            release.await(10, TimeUnit.SECONDS)
             return -1
           }
         }
