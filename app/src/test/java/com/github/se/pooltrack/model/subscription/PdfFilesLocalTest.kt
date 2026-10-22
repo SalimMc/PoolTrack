@@ -44,6 +44,8 @@ class PdfFilesLocalTest {
         "pdfFilesDataStore",
     )
     resolver = mockk(relaxed = true)
+    // A relaxed mock would hand out an endless empty stream, which a copy would never finish.
+    every { resolver.openInputStream(any()) } returns null
     pdfFiles = PdfFilesLocal(ResolverContext(appContext, resolver), currentUid)
   }
 
