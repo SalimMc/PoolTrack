@@ -12,8 +12,11 @@ import io.mockk.mockk
 import io.mockk.verify
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.InputStream
+import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -110,11 +113,43 @@ class PdfFilesLocalTest {
     pdfFiles.save("a", "content://docs/a.pdf")
     serve("content://docs/a.pdf", "late-copy")
 
-    pdfFiles.uris.first() // Reading them is what copies the PDF.
-    val stored = pdfFiles.uris.first().getValue("a")
+    // Reading them starts the copy, which finishes after the first emission.
+    val stored = pdfFiles.uris.first { it.getValue("a").startsWith("file:") }.getValue("a")
 
     assertTrue(stored.startsWith("file:"))
     assertEquals("late-copy", fileOf(stored).readText())
+  }
+
+  @Test
+  fun uris_areEmittedAtOnce_evenWhileAnOriginalFileIsStillBeingRead() = runTest {
+    every { resolver.openInputStream(any()) } returns null
+    pdfFiles.save("a", "content://docs/a.pdf")
+    val release = CountDownLatch(1)
+    every { resolver.openInputStream(any()) } returns
+        object : InputStream() {
+          override fun read(): Int {
+            release.await()
+            return -1
+          }
+        }
+
+    try {
+      assertEquals(mapOf("a" to "content://docs/a.pdf"), pdfFiles.uris.first())
+    } finally {
+      release.countDown()
+    }
+  }
+
+  @Test
+  fun save_leavesNoCopyBehind_whenTheLinkCannotBeRecorded() = runTest {
+    currentUid.value = null
+    serve("content://docs/a.pdf", "pdf-bytes")
+
+    assertThrows(IllegalStateException::class.java) {
+      runBlocking { pdfFiles.save("a", "content://docs/a.pdf") }
+    }
+
+    assertEquals(0, File(appContext.filesDir, "pdfs").listFiles()?.size ?: 0)
   }
 
   @Test
