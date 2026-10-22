@@ -3,6 +3,7 @@ package com.github.se.pooltrack.ui.home
 import com.github.se.pooltrack.model.entry.Entry
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.Locale
@@ -22,6 +23,19 @@ class HomeStatsTest {
   private val sundayLateNight = entryAt("2026-09-20T23:59:00Z")
   private val lastMonthMonday = entryAt("2026-08-31T10:00:00Z")
   private val allEntries = listOf(wednesday, mondayMidnight, sundayLateNight, lastMonthMonday)
+
+  private val expectedWeekStarts =
+      listOf(
+              "2026-08-03",
+              "2026-08-10",
+              "2026-08-17",
+              "2026-08-24",
+              "2026-08-31",
+              "2026-09-07",
+              "2026-09-14",
+              "2026-09-21",
+          )
+          .map(LocalDate::parse)
 
   private lateinit var previousLocale: Locale
 
@@ -49,6 +63,7 @@ class HomeStatsTest {
             daysSinceLastSwim = null,
             averageEntriesPerWeek = null,
             favoriteDayOfWeek = null,
+            weekStarts = expectedWeekStarts,
         ),
         computeHomeStats(emptyList(), now, zone),
     )
@@ -72,6 +87,7 @@ class HomeStatsTest {
             longestStreakWeeks = 2,
             bestWeekEntries = 2,
             weeklyCounts = listOf(0, 0, 0, 0, 1, 0, 1, 2),
+            weekStarts = expectedWeekStarts,
         ),
         computeHomeStats(allEntries, now, zone),
     )
@@ -93,6 +109,14 @@ class HomeStatsTest {
 
     assertEquals(2, stats.currentStreakWeeks)
     assertEquals(listOf(0, 0, 0, 0, 1, 0, 1, 2), stats.weeklyCounts)
+  }
+
+  @Test
+  fun computeHomeStats_listsTheMondayOfEachRecentWeek_oldestFirst() {
+    val stats = computeHomeStats(allEntries, now, zone)
+
+    assertEquals(expectedWeekStarts, stats.weekStarts)
+    assertEquals(stats.weeklyCounts.size, stats.weekStarts.size)
   }
 
   @Test

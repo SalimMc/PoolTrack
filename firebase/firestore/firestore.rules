@@ -42,9 +42,15 @@ rules_version = '2';
 //   - activeSubscriptionId: string | null (required key, <= 64 chars) - the
 //     subscription that is active, if any
 //
+// Document: users/{userId}
+// Fields (the usage figures the owner of the app reads in the Firebase console):
+//   - lastOpenedAtEpochMilli: int (required, year 2000 to now) - the last app launch
+//   - appVersion: string (required, <= 32 chars) - the version of that launch
+//   - openCount: int (required) - 1 on creation, then +1 on every launch
+//
 // Only the owner may touch their own tree, and only signed in with Google may
 // they write: an anonymous account can read (an empty tree) but never write.
-// The users/{userId} document itself is never written, and nothing else is
+// The users/{userId} document is never deleted, and nothing else is
 // stored. Everything not matched below is denied. Rules cannot count documents,
 // so how many a user may create is bounded by a Firebase budget alert instead.
 //
@@ -158,12 +164,27 @@ service cloud.firestore {
           isBoundedString(data.activeSubscriptionId, 64));
     }
 
+    function isValidUsage(data) {
+      return hasExactFields(data, ['lastOpenedAtEpochMilli', 'appVersion', 'openCount']) &&
+        isPastEpochMilli(data.lastOpenedAtEpochMilli) &&
+        isBoundedString(data.appVersion, 32) &&
+        data.openCount is int && data.openCount >= 1;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /users/{userId} {
       // Only the owner can read, write or remove their own data.
+
+      // The usage figures. Each open adds exactly one to the count, so it can't be set to
+      // anything else; the document is never deleted by the app.
+      allow read: if isOwner(userId);
+      allow create: if isOwnerWriter(userId) && isValidUsage(request.resource.data) &&
+        request.resource.data.openCount == 1;
+      allow update: if isOwnerWriter(userId) && isValidUsage(request.resource.data) &&
+        request.resource.data.openCount == resource.data.openCount + 1;
 
       match /entries/{entryId} {
         allow read: if isOwner(userId);
