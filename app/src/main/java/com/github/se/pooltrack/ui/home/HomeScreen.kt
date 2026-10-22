@@ -43,8 +43,11 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +75,7 @@ import com.github.se.pooltrack.ui.subscription.rememberRemainingCooldown
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -90,6 +94,8 @@ object HomeScreenTestTags {
   const val STREAK_STAT = "HomeScreenStreakStat"
   const val BEST_WEEK_STAT = "HomeScreenBestWeekStat"
   const val WEEKLY_CHART = "HomeScreenWeeklyChart"
+  const val WEEKLY_CHART_LEGEND = "HomeScreenWeeklyChartLegend"
+  const val WEEKLY_CHART_BAR = "HomeScreenWeeklyChartBar"
   const val OPEN_SUBSCRIPTION_FAB = "HomeScreenOpenSubscriptionFab"
 }
 
@@ -240,6 +246,7 @@ fun HomeScreen(
       }
       WeeklyChartCard(
           counts = stats.weeklyCounts,
+          weekStarts = stats.weekStarts,
           modifier = Modifier.testTag(HomeScreenTestTags.WEEKLY_CHART),
       )
       Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -477,9 +484,17 @@ private fun streakLabel(weeks: Int): String =
       else -> "$weeks weeks"
     }
 
-/** A small bar chart of entries per week over the last [RECENT_WEEKS] weeks. */
+/**
+ * A small bar chart of entries per week over the last [RECENT_WEEKS] weeks. Tapping a bar shows
+ * which week it is ([weekStarts] holds each bar's Monday); tapping it again hides that again.
+ */
 @Composable
-private fun WeeklyChartCard(counts: List<Int>, modifier: Modifier = Modifier) {
+private fun WeeklyChartCard(
+    counts: List<Int>,
+    weekStarts: List<LocalDate>,
+    modifier: Modifier = Modifier,
+) {
+  var selected by rememberSaveable { mutableStateOf<Int?>(null) }
   val maxCount = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
   Card(modifier = modifier.fillMaxWidth()) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
@@ -496,7 +511,13 @@ private fun WeeklyChartCard(counts: List<Int>, modifier: Modifier = Modifier) {
         counts.forEachIndexed { index, count ->
           val isCurrent = index == counts.lastIndex
           Column(
-              modifier = Modifier.weight(1f).fillMaxHeight(),
+              modifier =
+                  Modifier.weight(1f)
+                      .fillMaxHeight()
+                      .testTag(HomeScreenTestTags.WEEKLY_CHART_BAR)
+                      .clickable(enabled = index in weekStarts.indices) {
+                        selected = if (selected == index) null else index
+                      },
               horizontalAlignment = Alignment.CenterHorizontally,
               verticalArrangement = Arrangement.Bottom,
           ) {
@@ -510,7 +531,7 @@ private fun WeeklyChartCard(counts: List<Int>, modifier: Modifier = Modifier) {
                         .fillMaxHeight(0.8f * count / maxCount)
                         .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                         .background(
-                            if (isCurrent) MaterialTheme.colorScheme.primary
+                            if (isCurrent || index == selected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                         )
             )
@@ -523,8 +544,28 @@ private fun WeeklyChartCard(counts: List<Int>, modifier: Modifier = Modifier) {
           }
         }
       }
+      val selectedIndex = selected
+      if (selectedIndex != null && selectedIndex in weekStarts.indices) {
+        Text(
+            text = weekLegend(weekStarts[selectedIndex], counts[selectedIndex]),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp).testTag(HomeScreenTestTags.WEEKLY_CHART_LEGEND),
+        )
+      }
     }
   }
+}
+
+/** "12 Oct - 18 Oct: 3 entries" for the week starting on [weekStart] (a Monday). */
+internal fun weekLegend(
+    weekStart: LocalDate,
+    count: Int,
+    locale: Locale = Locale.getDefault(),
+): String {
+  val format = DateTimeFormatter.ofPattern("d MMM", locale)
+  val range = "${weekStart.format(format)} - ${weekStart.plusDays(6).format(format)}"
+  return "$range: ${if (count == 1) "1 entry" else "$count entries"}"
 }
 
 @Composable

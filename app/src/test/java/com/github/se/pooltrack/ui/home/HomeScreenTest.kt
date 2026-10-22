@@ -2,10 +2,12 @@ package com.github.se.pooltrack.ui.home
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -162,6 +164,44 @@ class HomeScreenTest {
   private fun assertTagAbsent(tag: String) {
     composeRule.onNodeWithTag(tag).assertDoesNotExist()
   }
+
+  // region weekly chart legend
+
+  @Test
+  fun weeklyChart_showsNoLegend_untilABarIsTapped() {
+    setContent()
+
+    assertTagAbsent(HomeScreenTestTags.WEEKLY_CHART_LEGEND)
+  }
+
+  @Test
+  fun weeklyChart_showsTheWeekOfATappedBar_andHidesItOnSecondTap() {
+    val monday = LocalDate.now(zone).with(DayOfWeek.MONDAY)
+    val repo = FakeEntryRepository(listOf(entryAt(noonOf(monday))))
+    setContent(entryRepository = repo)
+    val lastBar = {
+      composeRule.onAllNodesWithTag(HomeScreenTestTags.WEEKLY_CHART_BAR)[RECENT_WEEKS - 1]
+    }
+
+    lastBar().performClick()
+    composeRule
+        .onNodeWithTag(HomeScreenTestTags.WEEKLY_CHART_LEGEND)
+        .assertTextEquals(weekLegend(monday, 1, Locale.US))
+
+    lastBar().performClick()
+    assertTagAbsent(HomeScreenTestTags.WEEKLY_CHART_LEGEND)
+  }
+
+  @Test
+  fun weekLegend_spansMondayToSunday_andPluralizesEntries() {
+    val monday = LocalDate.of(2026, 10, 12)
+
+    assertEquals("12 Oct - 18 Oct: 3 entries", weekLegend(monday, 3, Locale.US))
+    assertEquals("12 Oct - 18 Oct: 1 entry", weekLegend(monday, 1, Locale.US))
+    assertEquals("12 Oct - 18 Oct: 0 entries", weekLegend(monday, 0, Locale.US))
+  }
+
+  // endregion
 
   // region empty state
 
