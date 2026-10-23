@@ -126,11 +126,12 @@ dependencies {
   androidTestImplementation(libs.androidx.ui.test.junit4)
 }
 
-// Fails when line coverage of the unit tests is below 80%. Part of `check`.
+// Fails when line coverage of the unit tests is below 80% or branch coverage is below 90%. Part of
+// `check`.
 // Compose singletons, R and BuildConfig are generated, so they are excluded.
 tasks.register<JacocoCoverageVerification>("coverageVerification") {
   group = "verification"
-  description = "Verifies that unit tests cover at least 80% of the lines."
+  description = "Verifies that unit tests cover at least 80% of the lines and 90% of the branches."
   dependsOn("testDebugUnitTest")
 
   executionData.setFrom(
@@ -157,6 +158,12 @@ tasks.register<JacocoCoverageVerification>("coverageVerification") {
       limit {
         counter = "LINE"
         minimum = "0.80".toBigDecimal()
+      }
+    }
+    rule {
+      limit {
+        counter = "BRANCH"
+        minimum = "0.90".toBigDecimal()
       }
     }
   }
