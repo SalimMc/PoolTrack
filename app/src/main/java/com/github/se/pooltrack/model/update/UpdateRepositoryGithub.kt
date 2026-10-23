@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.security.MessageDigest
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -66,44 +67,21 @@ class UpdateRepositoryGithub(
       }
 
   override fun download(update: AppUpdate): Flow<DownloadStatus> = flow {
-    val dir = File(context.cacheDir, UPDATES_DIR)
-    // Drops APKs left over from earlier updates and from interrupted downloads.
-    dir.deleteRecursively()
-    dir.mkdirs()
-    val apk = File(dir, "PoolTrack-${update.version}.apk")
-
+    val apk = prepareApkFile(File(context.cacheDir, UPDATES_DIR), update.version)
     try {
       emit(DownloadStatus.Progress(null))
       val digest = MessageDigest.getInstance("SHA-256")
-      var written = 0L
-      var lastPercent = -1
-      http.open(update.apkUrl).use { response ->
-        val total = if (response.contentLength > 0) response.contentLength else update.sizeBytes
-        if (total > maxApkBytes) throw IOException("Update is larger than $maxApkBytes bytes")
-        apk.outputStream().use { out ->
-          val buffer = ByteArray(BUFFER_SIZE)
-          while (true) {
-            currentCoroutineContext().ensureActive()
-            val read = response.body.read(buffer)
-            if (read < 0) break
-            out.write(buffer, 0, read)
-            digest.update(buffer, 0, read)
-            written += read
-            if (written > maxApkBytes) throw IOException("Update is larger than $maxApkBytes bytes")
-            if (total > 0) {
-              val percent = (written * PERCENT / total).toInt().coerceAtMost(PERCENT)
-              if (percent != lastPercent) {
-                lastPercent = percent
-                emit(DownloadStatus.Progress(percent / PERCENT.toFloat()))
-              }
+      val written =
+          http.open(update.apkUrl).use { response ->
+            val total = if (response.contentLength > 0) response.contentLength else update.sizeBytes
+            copyApk(response.body, apk, digest, total, maxApkBytes) {
+              emit(DownloadStatus.Progress(it))
             }
           }
-        }
-      }
       verify(update, written, digest.digest().toHex())
       emit(DownloadStatus.Finished(apk))
     } catch (e: Throwable) {
-      apk.delete()
+      deleteQuietly(apk)
       throw e
     }
   }
@@ -152,5 +130,63 @@ internal const val MAX_RELEASE_JSON_BYTES = 1_000_000L
 
 /** The app is a few megabytes; anything far above this is not an update. */
 internal const val MAX_APK_BYTES = 100L * 1024 * 1024
+
+/**
+ * Empties [dir] of APKs left over from earlier updates and interrupted downloads, recreates it and
+ * returns the file the APK of [version] is to be written to.
+ */
+internal fun prepareApkFile(dir: File, version: String): File {
+  dir.deleteRecursively()
+  dir.mkdirs()
+  return File(dir, "PoolTrack-$version.apk")
+}
+
+/**
+ * Deletes [file] and says whether it is gone. Failing is harmless: the updates directory is cleared
+ * before the next download anyway.
+ */
+internal fun deleteQuietly(file: File): Boolean = file.delete() || !file.exists()
+
+/**
+ * The whole percent, 0 to 100, of [written] bytes out of [total], or null when [total] is unknown.
+ */
+internal fun percentDone(written: Long, total: Long): Int? =
+    if (total > 0) (written * PERCENT / total).toInt().coerceAtMost(PERCENT) else null
+
+/**
+ * Copies [input] to [target], feeding [digest] and calling [onProgress] whenever the whole percent
+ * changes. Fails with an [IOException] when [total] or the bytes actually read exceed [maxBytes].
+ * Returns the number of bytes written.
+ */
+internal suspend fun copyApk(
+    input: InputStream,
+    target: File,
+    digest: MessageDigest,
+    total: Long,
+    maxBytes: Long,
+    onProgress: suspend (Float) -> Unit,
+): Long {
+  if (total > maxBytes) throw IOException("Update is larger than $maxBytes bytes")
+  var written = 0L
+  var lastPercent = -1
+  target.outputStream().use { out ->
+    val buffer = ByteArray(BUFFER_SIZE)
+    while (true) {
+      currentCoroutineContext().ensureActive()
+      val read = input.read(buffer)
+      if (read < 0) break
+      out.write(buffer, 0, read)
+      digest.update(buffer, 0, read)
+      written += read
+      if (written > maxBytes) throw IOException("Update is larger than $maxBytes bytes")
+      val percent = percentDone(written, total)
+      if (percent != null && percent != lastPercent) {
+        lastPercent = percent
+        onProgress(percent / PERCENT.toFloat())
+      }
+    }
+  }
+  return written
+}
 
 private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
