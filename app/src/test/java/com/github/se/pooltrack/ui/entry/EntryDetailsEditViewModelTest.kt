@@ -137,6 +137,29 @@ class EntryDetailsEditViewModelTest {
   }
 
   @Test
+  fun onDistanceEditSaved_changesNothing_whenNoEntryIsLoaded() {
+    val repository = FakeEntryRepository(listOf(older, newer))
+    val viewModel = viewModel(repository)
+
+    viewModel.onDistanceInputChanged("700")
+    viewModel.onDistanceEditSaved()
+
+    assertEquals(listOf(older, newer), repository.storedEntries)
+  }
+
+  @Test
+  fun onDistanceEditSaved_changesNothing_whenNoEditWasStarted() {
+    val repository = FakeEntryRepository(listOf(older, newer))
+    val viewModel = viewModel(repository)
+    viewModel.loadEntry(older.timestampEpochMilli)
+
+    viewModel.onDistanceEditSaved()
+
+    assertEquals(listOf(older, newer), repository.storedEntries)
+    assertNull(viewModel.distanceInput.value)
+  }
+
+  @Test
   fun onDistanceEditCancelled_changesNothing() {
     val repository = FakeEntryRepository(listOf(older, newer))
     val viewModel = viewModel(repository)

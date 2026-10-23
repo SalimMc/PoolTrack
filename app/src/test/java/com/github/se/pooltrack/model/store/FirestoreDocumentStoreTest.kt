@@ -175,6 +175,20 @@ class FirestoreDocumentStoreTest {
   }
 
   @Test
+  fun observe_ignoresAnEventWithNeitherASnapshotNorAnError() = runTest {
+    val emissions = mutableListOf<List<StoredDocument>>()
+    val job =
+        launch(UnconfinedTestDispatcher(testScheduler)) {
+          store.observe("entries").collect { emissions += it }
+        }
+
+    listener!!.onEvent(null, null)
+
+    assertEquals(emptyList<List<StoredDocument>>(), emissions)
+    job.cancel()
+  }
+
+  @Test
   fun observe_stopsListening_whenTheCollectorIsCancelled() = runTest {
     val job =
         launch(UnconfinedTestDispatcher(testScheduler)) { store.observe("entries").collect {} }

@@ -5,6 +5,7 @@ import com.github.se.pooltrack.model.clearPreferencesDataStore
 import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.entry.EntryRepositoryLocal
 import com.github.se.pooltrack.model.entry.entryFromBackup
+import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryLocal
 import com.github.se.pooltrack.model.subscription.hasPdf
 import com.github.se.pooltrack.model.subscription.subscriptionFromBackup
@@ -174,6 +175,14 @@ class RestoreFromBackupTest {
     assertEquals(emptyList<Entry>(), repository.getEntries().first())
   }
 
+  @Test
+  fun getEntries_staysEmpty_whenTheBackupHoldsNothing() = runTest {
+    firebase.returnDocuments()
+    val repository = EntryRepositoryLocal(appContext, currentUid)
+
+    assertEquals(emptyList<Entry>(), repository.getEntries().first())
+  }
+
   // endregion
 
   // region subscriptions
@@ -199,6 +208,33 @@ class RestoreFromBackupTest {
 
     assertEquals("pass-a", active?.id)
     assertTrue(repository.getSubscriptions().first().any { it.id == "old" })
+  }
+
+  @Test
+  fun getSubscriptions_staysEmpty_whenTheBackupHoldsNothing() = runTest {
+    firebase.returnDocuments()
+    val repository = SubscriptionRepositoryLocal(appContext, currentUid)
+
+    assertEquals(emptyList<Subscription>(), repository.getSubscriptions().first())
+  }
+
+  @Test
+  fun getSubscriptions_staysEmpty_whenTheBackupCannotBeRead() = runTest {
+    firebase.failReads()
+    val repository = SubscriptionRepositoryLocal(appContext, currentUid)
+
+    assertEquals(emptyList<Subscription>(), repository.getSubscriptions().first())
+  }
+
+  @Test
+  fun getActiveSubscription_isNone_whenEveryRestoredOneHasExpired() = runTest {
+    firebase.returnDocuments(passDoc + mapOf("expiresAtEpochMilli" to 1L))
+    val repository = SubscriptionRepositoryLocal(appContext, currentUid)
+
+    val restored = awaitNotEmpty { repository.getSubscriptions().first { it.isNotEmpty() } }
+
+    assertEquals(listOf("pass-a"), restored.map { it.id })
+    assertNull(repository.getActiveSubscription().first())
   }
 
   // endregion
