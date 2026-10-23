@@ -4,6 +4,7 @@ agp = "9.3.0"
 kotlin = "2.3.0"
 ktfmt = "0.27.0"
 googleServices = "4.5.0"
+sonarqube = "7.5.0.8588"
 
 # UI Compose
 # Every androidx.compose.* artifact is versioned by the BOM below - do not pin them here.
@@ -71,3 +72,4 @@ ktfmt = { id = "com.ncorti.ktfmt.gradle", version.ref = "ktfmt" }
 kotlinCompose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+sonarqube = { id = "org.sonarqube", version.ref = "sonarqube" }
