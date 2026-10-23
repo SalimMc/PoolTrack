@@ -110,13 +110,16 @@ jobs:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}-${{ hashFiles('firebase/firestore/test/package-lock.json') }}
 
+      # The lockfile pins every package, and none of them needs its install script to run the rules
+      # tests, so a compromised dependency cannot run code while installing.
       - name: Install dependencies
         run: |
-          npm ci
+          npm ci --ignore-scripts
 
+      # The installed compiler, never a package downloaded on demand.
       - name: Type-check
         run: |
-          npx tsc --noEmit
+          ./node_modules/.bin/tsc --noEmit
 
       # Starts the Firestore emulator from firebase.json, runs the suite against
       # firestore.rules, and fails the job if any test fails.
