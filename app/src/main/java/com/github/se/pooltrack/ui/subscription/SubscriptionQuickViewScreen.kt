@@ -1,7 +1,5 @@
 package com.github.se.pooltrack.ui.subscription
 
-import android.graphics.Bitmap
-import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
@@ -30,7 +28,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,19 +44,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.Screen
 import com.github.se.pooltrack.ui.navigation.TopNavigationMenu
 import java.time.Duration
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 object SubscriptionQuickViewScreenTestTags {
   const val LOADING_INDICATOR = "SubscriptionQuickViewScreenLoadingIndicator"
@@ -96,46 +89,52 @@ fun SubscriptionQuickViewScreen(
   ) { paddingValues ->
     val cooldown = remainingCooldown
     val currentUri = activeSubscription?.uri
-    if (cooldown != null) {
-      CooldownLockedMessage(
-          cooldown = cooldown,
-          modifier = Modifier.padding(paddingValues),
-      )
-    } else if (currentUri != null && currentUri.isBlank()) {
-      PdfMissingMessage(modifier = Modifier.padding(paddingValues))
-    } else if (currentUri == null) {
-      Column(
-          modifier = Modifier.fillMaxSize().padding(paddingValues).padding(32.dp),
-          verticalArrangement = Arrangement.Center,
-          horizontalAlignment = Alignment.CenterHorizontally,
-      ) {
-        Icon(
-            imageVector = Icons.Filled.Person,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "No active subscription",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-        )
-        Text(
-            text = "Add or activate one from the Subscriptions tab.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
-    } else {
-      PassDisplayAndAccept(
-          uri = currentUri,
-          onAccepted = {
-            viewModel.onScannerAccepted()
-            navigationActions?.goBack()
-          },
-          modifier = Modifier.padding(paddingValues),
-      )
+    when {
+      cooldown != null ->
+          CooldownLockedMessage(
+              cooldown = cooldown,
+              modifier = Modifier.padding(paddingValues),
+          )
+      currentUri != null && currentUri.isBlank() ->
+          PdfMissingMessage(modifier = Modifier.padding(paddingValues))
+      currentUri == null -> NoActiveSubscriptionMessage(Modifier.padding(paddingValues))
+      else ->
+          PassDisplayAndAccept(
+              uri = currentUri,
+              onAccepted = {
+                viewModel.onScannerAccepted()
+                navigationActions?.goBack()
+              },
+              modifier = Modifier.padding(paddingValues),
+          )
     }
+  }
+}
+
+/** Shown instead of the pass when no subscription is active. */
+@Composable
+private fun NoActiveSubscriptionMessage(modifier: Modifier = Modifier) {
+  Column(
+      modifier = modifier.fillMaxSize().padding(32.dp),
+      verticalArrangement = Arrangement.Center,
+      horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    Icon(
+        imageVector = Icons.Filled.Person,
+        contentDescription = null,
+        modifier = Modifier.size(64.dp),
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = "No active subscription",
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+    )
+    Text(
+        text = "Add or activate one from the Subscriptions tab.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
   }
 }
 
@@ -185,17 +184,12 @@ private fun PassDisplayAndAccept(
                     ?: checkNotNull(LocalViewModelStoreOwner.current),
         ),
 ) {
-  val context = LocalContext.current
-  var pageBitmap by remember(uri) { mutableStateOf<Bitmap?>(null) }
+  val pageBitmap by rememberPdfFirstPage(uri)
   val transform by zoomViewModel.transform.collectAsState()
   var viewport by remember { mutableStateOf(Size.Zero) }
   SideEffect { zoomViewModel.onPassShown(uri) }
   // Don't leave the last gesture waiting on the save delay when the screen goes away.
   DisposableEffect(zoomViewModel) { onDispose { zoomViewModel.persistNow() } }
-
-  LaunchedEffect(uri) {
-    pageBitmap = withContext(Dispatchers.IO) { renderFirstPdfPage(context, Uri.parse(uri)) }
-  }
 
   Column(modifier = modifier.fillMaxSize()) {
     Text(
