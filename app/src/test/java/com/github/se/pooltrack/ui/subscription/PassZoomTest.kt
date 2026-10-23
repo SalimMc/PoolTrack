@@ -252,6 +252,46 @@ class PassZoomTest {
   }
 
   @Test
+  fun viewModel_doesNotSave_whenNoPassIsShown() = runTest {
+    val repository = FakePassZoomRepository()
+    val vm = PassZoomViewModel(repository)
+
+    vm.onGesture(2f, Offset.Zero, Offset.Zero, viewport)
+    vm.persistNow()
+    runCurrent()
+
+    assertEquals(emptyList<Any>(), repository.saves)
+  }
+
+  @Test
+  fun viewModel_doesNotSave_whenTheViewportHasNoHeight() = runTest {
+    val repository = FakePassZoomRepository()
+    val vm = PassZoomViewModel(repository)
+    vm.onPassShown("a")
+
+    vm.onGesture(2f, Offset.Zero, Offset.Zero, Size(1000f, 0f))
+    vm.persistNow()
+    runCurrent()
+
+    assertEquals(emptyList<Any>(), repository.saves)
+  }
+
+  @Test
+  fun viewModel_waitsForARealViewport_beforeRestoringTheSavedZoom() = runTest {
+    val vm = PassZoomViewModel(FakePassZoomRepository(mapOf("a" to SavedPassZoom(2f, 0.25f, 0f))))
+    vm.onPassShown("a")
+    runCurrent()
+
+    vm.onViewportChanged(Size(1000f, 0f))
+    assertEquals(PassTransform.IDENTITY, vm.transform.value)
+    vm.onViewportChanged(Size(0f, 2000f))
+    assertEquals(PassTransform.IDENTITY, vm.transform.value)
+    vm.onViewportChanged(viewport)
+
+    assertEquals(PassTransform(2f, Offset(250f, 0f)), vm.transform.value)
+  }
+
+  @Test
   fun viewModel_showsUnzoomedPass_whenLoadFails() = runTest {
     val vm = PassZoomViewModel(FakePassZoomRepository(failing = true))
 

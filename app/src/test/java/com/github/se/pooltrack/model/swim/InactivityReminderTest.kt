@@ -133,4 +133,35 @@ class InactivityReminderTest {
     assertFalse(reminder.check(Instant.parse("2026-10-08T18:00:00Z"), zone))
     assertEquals(0, reminders)
   }
+
+  @Test
+  fun check_staysSilentWithoutAnActiveSubscription() = runTest {
+    var reminders = 0
+    val reminder =
+        InactivityReminder(
+            FakeEntryRepository(listOf(Entry(lastEntry.toEpochMilli(), subscriptionId = "a"))),
+            FakeSubscriptionRepository(listOf(subscription)),
+        ) {
+          reminders++
+        }
+
+    assertFalse(reminder.check(Instant.parse("2026-10-08T18:00:00Z"), zone))
+    assertEquals(0, reminders)
+  }
+
+  @Test
+  fun check_countsOnlyTheEntriesOfTheActiveSubscription() = runTest {
+    var reminders = 0
+    val used = Entry(lastEntry.toEpochMilli(), subscriptionId = "other")
+    val reminder =
+        InactivityReminder(
+            FakeEntryRepository(listOf(used, Entry(lastEntry.toEpochMilli() - 1, "a"))),
+            FakeSubscriptionRepository(listOf(subscription), initialActiveId = "a"),
+        ) {
+          reminders++
+        }
+
+    assertTrue(reminder.check(Instant.parse("2026-10-08T18:00:00Z"), zone))
+    assertEquals(1, reminders)
+  }
 }

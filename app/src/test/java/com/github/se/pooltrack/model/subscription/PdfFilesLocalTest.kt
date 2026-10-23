@@ -15,23 +15,31 @@ import java.io.File
 import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class PdfFilesLocalTest {
+
+  @get:Rule val temporaryFolder = TemporaryFolder()
 
   private val currentUid = MutableStateFlow<String?>("user-1")
 
@@ -152,6 +160,122 @@ class PdfFilesLocalTest {
     }
 
     assertEquals(0, File(appContext.filesDir, "pdfs").listFiles()?.size ?: 0)
+  }
+
+  private fun copiesDirectory() = File(appContext.filesDir, "pdfs")
+
+  /**
+   * Waits, in real time (the copies run on another thread), until [condition] holds. It suspends so
+   * that the collector started in the background of the test gets to run meanwhile.
+   */
+  private suspend fun eventually(what: String, condition: suspend () -> Boolean) {
+    repeat(100) {
+      if (condition()) return
+      withContext(Dispatchers.Default) { delay(50) }
+    }
+    assertTrue("Never happened: $what", condition())
+  }
+
+  @Test
+  fun save_keepsTheSameLink_whenTheSameOriginalIsSavedAgain() = runTest {
+    pdfFiles.save("a", "content://docs/a.pdf")
+    pdfFiles.save("a", "content://docs/a.pdf")
+
+    assertEquals(mapOf("a" to "content://docs/a.pdf"), pdfFiles.uris.first())
+  }
+
+  @Test
+  fun save_storesAFileLinkAsItIs_withoutCopyingIt() = runTest {
+    pdfFiles.save("a", "file:///somewhere/a.pdf")
+
+    assertEquals(mapOf("a" to "file:///somewhere/a.pdf"), pdfFiles.uris.first())
+    assertEquals(0, copiesDirectory().listFiles()?.size ?: 0)
+  }
+
+  @Test
+  fun save_leavesNoPartialFile_whenTheOriginalFailsHalfwayThrough() = runTest {
+    every { resolver.openInputStream(any()) } returns
+        object : InputStream() {
+          private var calls = 0
+
+          override fun read(): Int {
+            if (calls++ == 0) return 'a'.code
+            throw java.io.IOException("the file is gone")
+          }
+        }
+
+    pdfFiles.save("a", "content://docs/a.pdf")
+
+    assertEquals(mapOf("a" to "content://docs/a.pdf"), pdfFiles.uris.first())
+    assertEquals(0, copiesDirectory().listFiles()?.size ?: 0)
+  }
+
+  @Test
+  fun uris_skipsThePdfsAlreadyCopied_whenCopyingTheOthers() = runTest {
+    serve("content://docs/a.pdf", "first")
+    pdfFiles.save("a", "content://docs/a.pdf")
+    every { resolver.openInputStream(Uri.parse("content://docs/b.pdf")) } returns null
+    pdfFiles.save("b", "content://docs/b.pdf")
+    serve("content://docs/b.pdf", "second")
+    val copiedA = pdfFiles.uris.first().getValue("a")
+
+    backgroundScope.launch { pdfFiles.uris.collect {} }
+
+    eventually("b is copied") { pdfFiles.uris.first().getValue("b").startsWith("file:") }
+    assertEquals(copiedA, pdfFiles.uris.first().getValue("a"))
+  }
+
+  @Test
+  fun uris_discardsTheCopy_whenTheLinkChangedWhileItWasBeingMade() = runTest {
+    every { resolver.openInputStream(any()) } returns null
+    pdfFiles.save("a", "content://docs/a.pdf")
+    every { resolver.openInputStream(Uri.parse("content://docs/a.pdf")) } answers
+        {
+          // The subscription gets another PDF while the first one is still being copied.
+          runBlocking { pdfFiles.save("a", "content://docs/b.pdf") }
+          ByteArrayInputStream("late".toByteArray())
+        }
+
+    backgroundScope.launch { pdfFiles.uris.collect {} }
+
+    eventually("a points to b") { pdfFiles.uris.first()["a"] == "content://docs/b.pdf" }
+    eventually("the copy is deleted") { (copiesDirectory().listFiles()?.size ?: 0) == 0 }
+  }
+
+  @Test
+  fun deleteIfUnlinked_keepsACopyASubscriptionPointsTo() = runTest {
+    serve("content://docs/a.pdf", "pdf-bytes")
+    pdfFiles.save("a", "content://docs/a.pdf")
+    val copy = pdfFiles.uris.first().getValue("a")
+
+    pdfFiles.deleteIfUnlinked(copy)
+
+    assertTrue(fileOf(copy).exists())
+  }
+
+  @Test
+  fun deleteIfUnlinked_deletesACopyNothingPointsTo() = runTest {
+    serve("content://docs/a.pdf", "pdf-bytes")
+    pdfFiles.save("a", "content://docs/a.pdf")
+    val copy = pdfFiles.uris.first().getValue("a")
+    pdfFiles.remove("a")
+    copiesDirectory().mkdirs()
+    val orphan = File(copiesDirectory(), "orphan.pdf").apply { writeText("x") }
+
+    pdfFiles.deleteIfUnlinked(Uri.fromFile(orphan).toString())
+
+    assertFalse(orphan.exists())
+    assertFalse(fileOf(copy).exists())
+  }
+
+  @Test
+  fun remove_neverDeletesAFileOutsideTheAppStorage() = runTest {
+    val outside = temporaryFolder.newFile("mine.pdf")
+    pdfFiles.save("a", Uri.fromFile(outside).toString())
+
+    pdfFiles.remove("a")
+
+    assertTrue(outside.exists())
   }
 
   @Test

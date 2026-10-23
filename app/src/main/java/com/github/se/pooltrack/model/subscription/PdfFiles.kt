@@ -146,34 +146,43 @@ class PdfFilesLocal(
   }
 
   /** Copies the file at [uri] into the app's storage and returns its URI, or `null` if it fails. */
-  private suspend fun copyIntoAppStorage(uri: String): String? =
-      withContext(Dispatchers.IO) {
-        if (!uri.startsWith("content:")) return@withContext null
-        val directory = File(context.filesDir, PDF_DIRECTORY)
-        val target = File(directory, "${UUID.randomUUID()}.pdf")
-        var copied = false
-        try {
-          directory.mkdirs()
-          val input = context.contentResolver.openInputStream(Uri.parse(uri))
-          if (input == null) return@withContext null
-          input.use { source -> target.outputStream().use { source.copyTo(it) } }
-          copied = true
-          Uri.fromFile(target).toString()
-        } catch (_: IOException) {
-          null
-        } catch (_: SecurityException) {
-          null
-        } finally {
-          // A failed or cancelled copy leaves a partial file that nothing points to.
-          if (!copied) target.delete()
-        }
-      }
+  private suspend fun copyIntoAppStorage(uri: String): String? {
+    if (!uri.startsWith("content:")) return null
+    val directory = File(context.filesDir, PDF_DIRECTORY)
+    val target = File(directory, "${UUID.randomUUID()}.pdf")
+    var delivered = false
+    try {
+      val copied =
+          withContext(Dispatchers.IO) {
+            try {
+              directory.mkdirs()
+              val input = context.contentResolver.openInputStream(Uri.parse(uri))
+              if (input == null) {
+                false
+              } else {
+                input.use { source -> target.outputStream().use { source.copyTo(it) } }
+                true
+              }
+            } catch (_: IOException) {
+              false
+            } catch (_: SecurityException) {
+              false
+            }
+          }
+      delivered = copied
+      return if (copied) Uri.fromFile(target).toString() else null
+    } finally {
+      // A failed copy leaves a partial file. So does a cancellation that arrives just as the copy
+      // finishes: withContext then throws, and the caller never learns about the file.
+      if (!delivered) target.delete()
+    }
+  }
 
   /**
    * Deletes the copy at [uri] unless a subscription points to it. A failure or cancellation can
    * arrive after the link was recorded, and the copy must then stay.
    */
-  private suspend fun deleteIfUnlinked(uri: String) =
+  internal suspend fun deleteIfUnlinked(uri: String) =
       withContext(NonCancellable) {
         val uid = currentUid.first()
         if (uid == null || uri !in storedUris(uid).first().values) deleteCopy(uri)

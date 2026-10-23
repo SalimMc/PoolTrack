@@ -116,6 +116,7 @@ class UrlConnectionSourceTest {
     listOf(
             "https://github.com/SamiPr0/PoolTrack/releases/download/v1/a.apk",
             "https://api.github.com/repos/SamiPr0/PoolTrack/releases/latest",
+            "https://githubusercontent.com/x",
             "https://objects.githubusercontent.com/x",
             "https://release-assets.githubusercontent.com/x",
         )
