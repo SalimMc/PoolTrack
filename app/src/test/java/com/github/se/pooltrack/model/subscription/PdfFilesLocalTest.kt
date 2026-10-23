@@ -279,6 +279,41 @@ class PdfFilesLocalTest {
   }
 
   @Test
+  fun remove_survivesACopyThatCannotBeDeleted() = runTest {
+    // A non-empty directory cannot be deleted like a file.
+    val stuck = File(copiesDirectory(), "stuck.pdf")
+    File(stuck, "child").apply { parentFile?.mkdirs() }.writeText("x")
+    pdfFiles.save("a", Uri.fromFile(stuck).toString())
+
+    pdfFiles.remove("a")
+
+    assertTrue(stuck.exists())
+    assertTrue(pdfFiles.uris.first().isEmpty())
+  }
+
+  @Test
+  fun save_copiesOnTheInjectedDispatcher() = runTest {
+    var dispatched = 0
+    val counting =
+        object : kotlinx.coroutines.CoroutineDispatcher() {
+          override fun dispatch(
+              context: kotlin.coroutines.CoroutineContext,
+              block: Runnable,
+          ) {
+            dispatched++
+            block.run()
+          }
+        }
+    val injected = PdfFilesLocal(ResolverContext(appContext, resolver), currentUid, counting)
+    serve("content://docs/a.pdf", "pdf-bytes")
+
+    injected.save("a", "content://docs/a.pdf")
+
+    assertTrue(dispatched > 0)
+    assertTrue(injected.uris.first().getValue("a").startsWith("file:"))
+  }
+
+  @Test
   fun uris_isEmpty_whenNoPdfWasSaved() = runTest {
     assertEquals(emptyMap<String, String>(), pdfFiles.uris.first())
   }
