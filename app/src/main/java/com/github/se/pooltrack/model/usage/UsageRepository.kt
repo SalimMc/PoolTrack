@@ -5,7 +5,7 @@ package com.github.se.pooltrack.model.usage
  * can see in the Firebase console how many people use it. Nothing about the user's pool data is
  * included.
  */
-interface UsageRepository {
+fun interface UsageRepository {
 
   /**
    * Notes that the app was just opened on version [appVersion]. Best effort: it does nothing while
