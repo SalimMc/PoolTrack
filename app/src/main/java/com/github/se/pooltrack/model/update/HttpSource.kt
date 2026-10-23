@@ -11,9 +11,7 @@ private const val READ_TIMEOUT_MS = 20_000
 private const val MAX_REDIRECTS = 5
 
 /** An open HTTP response. [contentLength] is -1 when the server did not send one. */
-class HttpResponse(val body: InputStream, val contentLength: Long) : Closeable {
-  override fun close() = body.close()
-}
+class HttpResponse(val body: InputStream, val contentLength: Long) : Closeable by body
 
 /** Opens HTTP GET requests. A seam so the updater can be tested without a network. */
 fun interface HttpSource {
