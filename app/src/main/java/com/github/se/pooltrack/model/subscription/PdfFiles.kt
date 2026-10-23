@@ -4,12 +4,14 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.File
 import java.io.IOException
 import java.util.UUID
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -53,6 +55,9 @@ interface PdfFiles {
 }
 
 private const val PDF_DIRECTORY = "pdfs"
+private const val CONTENT_SCHEME = "content:"
+private const val FILE_SCHEME = "file:"
+private const val TAG = "PdfFiles"
 
 private val Context.pdfFilesDataStore by preferencesDataStore(name = "pdf_files")
 
@@ -67,6 +72,7 @@ private fun urisKey(uid: String) = stringPreferencesKey("pdf_uris_json_$uid")
 class PdfFilesLocal(
     private val context: Context,
     private val currentUid: Flow<String?>,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfFiles {
 
   override val uris: Flow<Map<String, String>> =
@@ -115,7 +121,7 @@ class PdfFilesLocal(
       val rest = current - id
       removed = uri
       // Several subscriptions can share one file: keep the permission while any still uses it.
-      if (uri != null && uri.startsWith("content:") && uri !in rest.values) released = uri
+      if (uri != null && uri.startsWith(CONTENT_SCHEME) && uri !in rest.values) released = uri
       rest
     }
     released?.let { releasePermission(it) }
@@ -124,58 +130,68 @@ class PdfFilesLocal(
 
   /** Copies the PDFs still linked to their original file, e.g. those added by an older version. */
   private suspend fun copyRemaining(uid: String) {
-    if (storedUris(uid).first().values.none { it.startsWith("content:") }) return
+    if (storedUris(uid).first().values.none { it.startsWith(CONTENT_SCHEME) }) return
     copyLock.withLock {
       // Read again once it is this call's turn: another collector may have copied them meanwhile.
       for ((id, uri) in storedUris(uid).first()) {
-        if (!uri.startsWith("content:")) continue
-        val copy = copyIntoAppStorage(uri) ?: continue
-        var swapped = false
-        try {
-          change { current ->
-            swapped = current[id] == uri
-            if (swapped) current + (id to copy) else current
-          }
-        } catch (e: Throwable) {
-          deleteIfUnlinked(copy)
-          throw e
-        }
-        if (!swapped) deleteCopy(copy)
+        if (uri.startsWith(CONTENT_SCHEME)) relink(id, uri)
       }
     }
   }
 
+  /** Replaces the link [uri] of the subscription [id] by a copy in the app's storage, if any. */
+  private suspend fun relink(id: String, uri: String) {
+    val copy = copyIntoAppStorage(uri) ?: return
+    var swapped = false
+    try {
+      change { current ->
+        swapped = current[id] == uri
+        if (swapped) current + (id to copy) else current
+      }
+    } catch (e: Throwable) {
+      deleteIfUnlinked(copy)
+      throw e
+    }
+    if (!swapped) deleteCopy(copy)
+  }
+
   /** Copies the file at [uri] into the app's storage and returns its URI, or `null` if it fails. */
   private suspend fun copyIntoAppStorage(uri: String): String? {
-    if (!uri.startsWith("content:")) return null
+    if (!uri.startsWith(CONTENT_SCHEME)) return null
     val directory = File(context.filesDir, PDF_DIRECTORY)
     val target = File(directory, "${UUID.randomUUID()}.pdf")
     var delivered = false
     try {
-      val copied =
-          withContext(Dispatchers.IO) {
-            try {
-              directory.mkdirs()
-              val input = context.contentResolver.openInputStream(Uri.parse(uri))
-              if (input == null) {
-                false
-              } else {
-                input.use { source -> target.outputStream().use { source.copyTo(it) } }
-                true
-              }
-            } catch (_: IOException) {
-              false
-            } catch (_: SecurityException) {
-              false
-            }
-          }
+      val copied = withContext(ioDispatcher) { streamInto(uri, directory, target) }
       delivered = copied
       return if (copied) Uri.fromFile(target).toString() else null
     } finally {
       // A failed copy leaves a partial file. So does a cancellation that arrives just as the copy
       // finishes: withContext then throws, and the caller never learns about the file.
-      if (!delivered) target.delete()
+      if (!delivered) deleteFile(target)
     }
+  }
+
+  /** Streams the file at [uri] into [target]; `false` if it can't be opened or read. */
+  private fun streamInto(uri: String, directory: File, target: File): Boolean =
+      try {
+        directory.mkdirs()
+        val input = context.contentResolver.openInputStream(Uri.parse(uri))
+        if (input == null) {
+          false
+        } else {
+          input.use { source -> target.outputStream().use { source.copyTo(it) } }
+          true
+        }
+      } catch (_: IOException) {
+        false
+      } catch (_: SecurityException) {
+        false
+      }
+
+  /** Best-effort delete: a file that can't be removed is only logged, nothing else can be done. */
+  private fun deleteFile(file: File) {
+    if (!file.delete() && file.exists()) Log.w(TAG, "Could not delete ${file.name}")
   }
 
   /**
@@ -190,9 +206,9 @@ class PdfFilesLocal(
 
   /** Deletes the file at [uri] if it is one of the copies made by [copyIntoAppStorage]. */
   private fun deleteCopy(uri: String) {
-    if (!uri.startsWith("file:")) return
+    if (!uri.startsWith(FILE_SCHEME)) return
     val file = File(requireNotNull(Uri.parse(uri).path))
-    if (file.parentFile == File(context.filesDir, PDF_DIRECTORY)) file.delete()
+    if (file.parentFile == File(context.filesDir, PDF_DIRECTORY)) deleteFile(file)
   }
 
   /** Gives back the long-lived read permission taken by [keepReadable], so they don't pile up. */
