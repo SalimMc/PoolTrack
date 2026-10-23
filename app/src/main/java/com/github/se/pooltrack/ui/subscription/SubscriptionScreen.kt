@@ -1,6 +1,5 @@
 package com.github.se.pooltrack.ui.subscription
 
-import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,7 +52,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +62,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -80,7 +77,6 @@ import com.github.se.pooltrack.model.subscription.expiresAt
 import com.github.se.pooltrack.model.subscription.hasPdf
 import com.github.se.pooltrack.model.subscription.isExpired
 import com.github.se.pooltrack.model.subscription.pricePerEntry
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
 import com.github.se.pooltrack.ui.navigation.BottomNavigationMenu
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.Screen
@@ -95,8 +91,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 object SubscriptionScreenTestTags {
   const val EMPTY_MESSAGE = "SubscriptionScreenEmptyMessage"
@@ -270,7 +264,7 @@ fun SubscriptionScreen(
         onAttachPdf = {
           selectedSubscription = null
           subscriptionGettingPdf = subscription
-          attachPdfLauncher.launch(arrayOf("application/pdf"))
+          attachPdfLauncher.launch(PDF_MIME_TYPES)
         },
         onDelete = {
           selectedSubscription = null
@@ -326,7 +320,7 @@ fun SubscriptionScreen(
             Screen.Subscription,
             actions = {
               IconButton(
-                  onClick = { pickPdfLauncher.launch(arrayOf("application/pdf")) },
+                  onClick = { pickPdfLauncher.launch(PDF_MIME_TYPES) },
                   modifier = Modifier.testTag(SubscriptionScreenTestTags.ADD_BUTTON),
               ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add subscription")
@@ -367,7 +361,7 @@ fun SubscriptionScreen(
             modifier = Modifier.padding(bottom = 24.dp),
         )
         Button(
-            onClick = { pickPdfLauncher.launch(arrayOf("application/pdf")) },
+            onClick = { pickPdfLauncher.launch(PDF_MIME_TYPES) },
             modifier = Modifier.testTag(SubscriptionScreenTestTags.EMPTY_ADD_BUTTON),
         ) {
           Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -768,7 +762,7 @@ private fun SubscriptionDetailsDialog(
                         Modifier.fillMaxWidth()
                             .testTag(SubscriptionScreenTestTags.EXPIRATION_ENTRIES_FIELD),
                 )
-            ExpirationMode.NONE -> {}
+            ExpirationMode.NONE -> Unit
           }
 
           Spacer(modifier = Modifier.height(20.dp))
@@ -914,12 +908,7 @@ private fun StatusChip(isActive: Boolean) {
 /** A larger, elevated preview of the PDF's first page, used in the detail dialog. */
 @Composable
 private fun SubscriptionPreview(uri: String, width: Dp, height: Dp) {
-  val context = LocalContext.current
-  var bitmap by remember(uri) { mutableStateOf<Bitmap?>(null) }
-
-  LaunchedEffect(uri) {
-    bitmap = withContext(Dispatchers.IO) { renderFirstPdfPage(context, Uri.parse(uri)) }
-  }
+  val bitmap by rememberPdfFirstPage(uri)
 
   Surface(
       modifier = Modifier.size(width = width, height = height),
@@ -941,12 +930,7 @@ private fun SubscriptionPreview(uri: String, width: Dp, height: Dp) {
 /** A preview of the PDF's first page, rendered asynchronously, at the given [width]/[height]. */
 @Composable
 private fun SubscriptionThumbnail(uri: String, width: Dp, height: Dp) {
-  val context = LocalContext.current
-  var bitmap by remember(uri) { mutableStateOf<Bitmap?>(null) }
-
-  LaunchedEffect(uri) {
-    bitmap = withContext(Dispatchers.IO) { renderFirstPdfPage(context, Uri.parse(uri)) }
-  }
+  val bitmap by rememberPdfFirstPage(uri)
 
   Box(
       modifier =
