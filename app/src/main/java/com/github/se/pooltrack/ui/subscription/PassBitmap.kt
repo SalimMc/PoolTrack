@@ -9,30 +9,35 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
+import com.github.se.pooltrack.model.subscription.renderPassFirstPage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** MIME types the PDF pickers accept. */
-internal val PDF_MIME_TYPES = arrayOf("application/pdf")
+/** MIME types the pass pickers accept: a PDF, or an image such as a screenshot of a QR code. */
+internal val PASS_MIME_TYPES = arrayOf("application/pdf", "image/png", "image/jpeg")
 
-/** Renders the first page of the PDF at [uri] on [dispatcher], keeping the UI thread free. */
-internal suspend fun loadPdfFirstPage(
+/**
+ * Renders the pass (image or first PDF page) at [uri] on [dispatcher], keeping the UI thread free.
+ */
+internal suspend fun loadPassFirstPage(
     context: Context,
     uri: String,
     dispatcher: CoroutineDispatcher,
-    render: (Context, Uri) -> Bitmap? = ::renderFirstPdfPage,
+    render: (Context, Uri) -> Bitmap? = ::renderPassFirstPage,
 ): Bitmap? = withContext(dispatcher) { render(context, Uri.parse(uri)) }
 
-/** The first page of the PDF at [uri], rendered off the main thread; null until it is ready. */
+/**
+ * The pass at [uri] (image or first PDF page), rendered off the main thread; null until it is
+ * ready.
+ */
 @Composable
-internal fun rememberPdfFirstPage(
+internal fun rememberPassFirstPage(
     uri: String,
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ): State<Bitmap?> {
   val context = LocalContext.current
   val bitmap = remember(uri) { mutableStateOf<Bitmap?>(null) }
-  LaunchedEffect(uri) { bitmap.value = loadPdfFirstPage(context, uri, dispatcher) }
+  LaunchedEffect(uri) { bitmap.value = loadPassFirstPage(context, uri, dispatcher) }
   return bitmap
 }
