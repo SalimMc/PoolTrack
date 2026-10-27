@@ -31,6 +31,8 @@ allprojects {
     dependencyLocking { lockAllConfigurations() }
 
     tasks.register("resolveAndLockAll") {
+        group = "verification"
+        description = "Resolves every configuration to regenerate the dependency lockfiles."
         notCompatibleWithConfigurationCache("Resolves configurations at execution time")
         doFirst {
             require(gradle.startParameter.isWriteDependencyLocks) {

@@ -35,6 +35,13 @@ commit them with the change:
 On a Dependabot PR, run the same command on its branch and push the result.
 Review the lockfile diff like any other code. Never edit a lockfile by hand.
 
+Artifact checksums are pinned in `gradle/verification-metadata.xml`; a build fails on an artifact with
+no matching checksum. After a version bump, regenerate it together with the lockfiles:
+
+```
+./gradlew --write-verification-metadata sha256 check jacocoTestReport ktfmtCheck assembleDebugAndroidTest
+```
+
 ## Definition of done
 
 - The feature works and matches its acceptance criteria.
