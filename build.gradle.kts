@@ -23,3 +23,25 @@ sonar {
         )
     }
 }
+
+// Locks every resolved dependency version (including transitive ones) in `gradle.lockfile`
+// files, so a build resolves the same versions everywhere. Regenerate after a version bump:
+// `./gradlew resolveAndLockAll --write-locks`.
+allprojects {
+    dependencyLocking { lockAllConfigurations() }
+
+    tasks.register("resolveAndLockAll") {
+        notCompatibleWithConfigurationCache("Resolves configurations at execution time")
+        doFirst {
+            require(gradle.startParameter.isWriteDependencyLocks) {
+                "Run with --write-locks to regenerate the lockfiles."
+            }
+        }
+        doLast {
+            // Resolves the dependency graph only (no files), which is what writes the lock.
+            configurations
+                .filter { it.isCanBeResolved }
+                .forEach { it.incoming.resolutionResult.rootComponent.get() }
+        }
+    }
+}
