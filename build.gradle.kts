@@ -38,9 +38,10 @@ allprojects {
             }
         }
         doLast {
+            // Resolves the dependency graph only (no files), which is what writes the lock.
             configurations
                 .filter { it.isCanBeResolved }
-                .forEach { runCatching { it.resolve() } }
+                .forEach { it.incoming.resolutionResult.rootComponent.get() }
         }
     }
 }
