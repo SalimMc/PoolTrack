@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.github.se.pooltrack.SecureWindow
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.Screen
 import com.github.se.pooltrack.ui.navigation.TopNavigationMenu
@@ -75,6 +76,7 @@ fun SubscriptionQuickViewScreen(
   val lastEntryTimestamp by viewModel.lastEntryTimestamp.collectAsState()
   val remainingCooldown = rememberRemainingCooldown(lastEntryTimestamp)
 
+  SecureWindow()
   if (remainingCooldown == null && activeSubscription != null) {
     MaxBrightness()
   }

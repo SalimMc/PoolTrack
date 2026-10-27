@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.github.se.pooltrack.SecureWindow
 import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.model.subscription.addedAt
 import com.github.se.pooltrack.model.subscription.expiresAt
@@ -194,6 +195,7 @@ fun SubscriptionScreen(
     viewModel: SubscriptionViewModel = viewModel(),
     navigationActions: NavigationActions? = null,
 ) {
+  SecureWindow()
   val subscriptions by viewModel.subscriptions.collectAsState()
   val activeSubscription by viewModel.activeSubscription.collectAsState()
   val entryCountsBySubscriptionId by viewModel.entryCountsBySubscriptionId.collectAsState()

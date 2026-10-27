@@ -197,14 +197,13 @@ class MainActivityTest {
   }
 
   @Test
-  fun onCreate_securesTheWindow_onlyInReleaseBuilds() {
+  fun onCreate_leavesTheWindowShareable_untilThePassIsOpened() {
     AuthRepositoryProvider.repository = FakeAuthRepository(initialUser = null)
 
     ActivityScenario.launch(MainActivity::class.java).use { scenario ->
       scenario.onActivity { activity ->
         val flags = activity.window.attributes.flags
-        val isSecure = flags and WindowManager.LayoutParams.FLAG_SECURE != 0
-        assertEquals(!BuildConfig.DEBUG, isSecure)
+        assertEquals(0, flags and WindowManager.LayoutParams.FLAG_SECURE)
       }
     }
   }
