@@ -5,6 +5,7 @@ import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.NonRestartableComposable
 
 /**
  * Marks this window as secure, or not. A secure window can't be screenshotted, screen-recorded or
@@ -25,6 +26,7 @@ fun Window.applyScreenSecurity(secure: Boolean) {
  * Debug builds stay screenshot-able, for design reviews and bug reports.
  */
 @Composable
+@NonRestartableComposable
 fun SecureWindow(secure: Boolean = !BuildConfig.DEBUG) {
   val activity = LocalActivity.current ?: return
   DisposableEffect(activity, secure) {
