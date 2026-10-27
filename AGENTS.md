@@ -21,6 +21,19 @@ Where things live:
 - Keep the **MVVM** separation. **ViewModels never import Firebase**, a repository implementation or `Application`; they depend on repository interfaces, taken as constructor parameters that default to the matching `XRepositoryProvider.repository`. Firebase lives only in the `model/` repositories.
 - Do not edit generated code.
 
+## Dependency lock
+
+Every resolved version, transitive ones included, is pinned in `app/gradle.lockfile` and
+`settings-gradle.lockfile` (Gradle dependency locking). A build fails if it resolves something else.
+After every version bump (`gradle/libs.versions.toml`, a plugin, Gradle itself), regenerate and
+commit them with the change:
+
+```
+./gradlew resolveAndLockAll --write-locks
+```
+
+Review the lockfile diff like any other code. Never edit a lockfile by hand.
+
 ## Definition of done
 
 - The feature works and matches its acceptance criteria.
