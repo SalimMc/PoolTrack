@@ -16,7 +16,7 @@ import androidx.compose.ui.test.pinch
 import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.subscription.PassZoomRepositoryProvider
 import com.github.se.pooltrack.model.subscription.Subscription
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
+import com.github.se.pooltrack.model.subscription.renderPassFirstPage
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.NavigationTestTags
 import com.github.se.pooltrack.utils.FakeEntryRepository
@@ -63,7 +63,7 @@ class SubscriptionQuickViewScreenTest {
     PassZoomRepositoryProvider.repository = FakePassZoomRepository()
     // The real renderer needs a PDF behind a content URI: stub it with a tiny bitmap.
     mockkStatic("com.github.se.pooltrack.model.subscription.PdfThumbnailKt")
-    every { renderFirstPdfPage(any(), any()) } answers
+    every { renderPassFirstPage(any(), any()) } answers
         {
           Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)
         }
@@ -119,10 +119,10 @@ class SubscriptionQuickViewScreenTest {
 
   @Test
   fun quickViewScreen_showsLoadingIndicator_whenPageNotRendered() {
-    every { renderFirstPdfPage(any(), any()) } returns null
+    every { renderPassFirstPage(any(), any()) } returns null
     show(awaitPass = false)
 
-    verify(timeout = 5_000) { renderFirstPdfPage(any(), any()) }
+    verify(timeout = 5_000) { renderPassFirstPage(any(), any()) }
     composeTestRule.waitForIdle()
     composeTestRule
         .onNodeWithTag(SubscriptionQuickViewScreenTestTags.LOADING_INDICATOR)

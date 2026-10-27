@@ -30,7 +30,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.core.app.ActivityOptionsCompat
 import com.github.se.pooltrack.model.entry.Entry
 import com.github.se.pooltrack.model.subscription.Subscription
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
+import com.github.se.pooltrack.model.subscription.renderPassFirstPage
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.NavigationTestTags
 import com.github.se.pooltrack.ui.navigation.Screen
@@ -78,10 +78,10 @@ class SubscriptionScreenTest {
   fun setUp() {
     previousLocale = Locale.getDefault()
     Locale.setDefault(Locale.US)
-    // PdfRenderer is a native Android class Robolectric cannot run, and renderFirstPdfPage has no
+    // PdfRenderer is a native Android class Robolectric cannot run, and renderPassFirstPage has no
     // injection seam, so the PDF boundary itself is stubbed: it "renders" a tiny bitmap.
     mockkStatic("com.github.se.pooltrack.model.subscription.PdfThumbnailKt")
-    every { renderFirstPdfPage(any(), any()) } answers
+    every { renderPassFirstPage(any(), any()) } answers
         {
           renderedUris += secondArg<Uri>().toString()
           renderedBitmap
@@ -181,7 +181,10 @@ class SubscriptionScreenTest {
 
     tag(SubscriptionScreenTestTags.EMPTY_ADD_BUTTON).performClick()
 
-    assertEquals(listOf("application/pdf"), (registry.launchedInput as Array<*>).toList())
+    assertEquals(
+        listOf("application/pdf", "image/png", "image/jpeg"),
+        (registry.launchedInput as Array<*>).toList(),
+    )
     tag(SubscriptionScreenTestTags.EXPIRATION_DIALOG).assertIsDisplayed()
   }
 
@@ -191,7 +194,10 @@ class SubscriptionScreenTest {
 
     openAddDialog()
 
-    assertEquals(listOf("application/pdf"), (registry.launchedInput as Array<*>).toList())
+    assertEquals(
+        listOf("application/pdf", "image/png", "image/jpeg"),
+        (registry.launchedInput as Array<*>).toList(),
+    )
   }
 
   @Test

@@ -264,7 +264,7 @@ fun SubscriptionScreen(
         onAttachPdf = {
           selectedSubscription = null
           subscriptionGettingPdf = subscription
-          attachPdfLauncher.launch(PDF_MIME_TYPES)
+          attachPdfLauncher.launch(PASS_MIME_TYPES)
         },
         onDelete = {
           selectedSubscription = null
@@ -320,7 +320,7 @@ fun SubscriptionScreen(
             Screen.Subscription,
             actions = {
               IconButton(
-                  onClick = { pickPdfLauncher.launch(PDF_MIME_TYPES) },
+                  onClick = { pickPdfLauncher.launch(PASS_MIME_TYPES) },
                   modifier = Modifier.testTag(SubscriptionScreenTestTags.ADD_BUTTON),
               ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add subscription")
@@ -361,12 +361,12 @@ fun SubscriptionScreen(
             modifier = Modifier.padding(bottom = 24.dp),
         )
         Button(
-            onClick = { pickPdfLauncher.launch(PDF_MIME_TYPES) },
+            onClick = { pickPdfLauncher.launch(PASS_MIME_TYPES) },
             modifier = Modifier.testTag(SubscriptionScreenTestTags.EMPTY_ADD_BUTTON),
         ) {
           Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Add subscription PDF")
+          Text("Add subscription")
         }
       }
     } else {
@@ -908,7 +908,7 @@ private fun StatusChip(isActive: Boolean) {
 /** A larger, elevated preview of the PDF's first page, used in the detail dialog. */
 @Composable
 private fun SubscriptionPreview(uri: String, width: Dp, height: Dp) {
-  val bitmap by rememberPdfFirstPage(uri)
+  val bitmap by rememberPassFirstPage(uri)
 
   Surface(
       modifier = Modifier.size(width = width, height = height),
@@ -930,7 +930,7 @@ private fun SubscriptionPreview(uri: String, width: Dp, height: Dp) {
 /** A preview of the PDF's first page, rendered asynchronously, at the given [width]/[height]. */
 @Composable
 private fun SubscriptionThumbnail(uri: String, width: Dp, height: Dp) {
-  val bitmap by rememberPdfFirstPage(uri)
+  val bitmap by rememberPassFirstPage(uri)
 
   Box(
       modifier =

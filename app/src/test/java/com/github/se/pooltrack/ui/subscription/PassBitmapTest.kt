@@ -16,23 +16,23 @@ import org.robolectric.RobolectricTestRunner
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-class PdfPageBitmapTest {
+class PassBitmapTest {
 
   private val context: Context = ApplicationProvider.getApplicationContext()
 
   @Test
-  fun pdfMimeTypes_acceptsOnlyPdf() {
-    assertArrayEquals(arrayOf("application/pdf"), PDF_MIME_TYPES)
+  fun passMimeTypes_acceptPdfAndImages() {
+    assertArrayEquals(arrayOf("application/pdf", "image/png", "image/jpeg"), PASS_MIME_TYPES)
   }
 
   @Test
-  fun loadPdfFirstPage_rendersTheGivenUriOnTheGivenDispatcher() =
+  fun loadPassFirstPage_rendersTheGivenUriOnTheGivenDispatcher() =
       runTest(StandardTestDispatcher()) {
         val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         var renderedUri: String? = null
 
         val result =
-            loadPdfFirstPage(context, "content://pass/1", StandardTestDispatcher(testScheduler)) {
+            loadPassFirstPage(context, "content://pass/1", StandardTestDispatcher(testScheduler)) {
                 _,
                 uri ->
               renderedUri = uri.toString()
@@ -44,10 +44,10 @@ class PdfPageBitmapTest {
       }
 
   @Test
-  fun loadPdfFirstPage_returnsNullWhenRenderingFails() =
+  fun loadPassFirstPage_returnsNullWhenRenderingFails() =
       runTest(StandardTestDispatcher()) {
         val result =
-            loadPdfFirstPage(context, "content://pass/2", StandardTestDispatcher(testScheduler)) {
+            loadPassFirstPage(context, "content://pass/2", StandardTestDispatcher(testScheduler)) {
                 _,
                 _ ->
               null

@@ -12,6 +12,8 @@ import android.os.ParcelFileDescriptor
 import com.github.se.pooltrack.model.ResolverContext
 import io.mockk.every
 import io.mockk.mockk
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException
 import org.junit.Assert.assertEquals
@@ -101,6 +103,62 @@ class PdfThumbnailTest {
     assertEquals(listOf(PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY), FakePdfPage.renderModes)
     assertEquals(1, FakePdfPage.closed)
     assertEquals(1, FakePdfRenderer.closed)
+  }
+
+  private fun pngBytes(width: Int, height: Int): ByteArray {
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    bitmap.eraseColor(Color.BLACK)
+    return ByteArrayOutputStream()
+        .also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        .toByteArray()
+  }
+
+  @Test
+  fun renderPassFirstPage_returnsTheImage_whenPassIsAnImage() {
+    val bytes = pngBytes(12, 8)
+    every { resolver.openInputStream(uri) } answers { ByteArrayInputStream(bytes) }
+
+    val bitmap = renderPassFirstPage(context, uri)
+
+    assertNotNull(bitmap)
+    assertEquals(12, bitmap!!.width)
+    assertEquals(8, bitmap.height)
+    assertEquals(emptyList<Int>(), FakePdfRenderer.openedPages)
+  }
+
+  @Test
+  fun renderPassFirstPage_scalesDownImagesLargerThanTheLimit() {
+    val bytes = pngBytes(5000, 10)
+    every { resolver.openInputStream(uri) } answers { ByteArrayInputStream(bytes) }
+
+    val bitmap = renderPassFirstPage(context, uri)
+
+    assertNotNull(bitmap)
+    assertEquals(2500, bitmap!!.width)
+  }
+
+  @Test
+  fun renderPassFirstPage_fallsBackToPdf_whenImageStreamCannotBeOpened() {
+    every { resolver.openInputStream(uri) } throws FileNotFoundException("gone")
+    every { resolver.openFileDescriptor(uri, "r") } returns null
+
+    assertNull(renderPassFirstPage(context, uri))
+  }
+
+  @Test
+  fun renderPassFirstPage_fallsBackToPdf_whenImageStreamIsNull() {
+    every { resolver.openInputStream(uri) } returns null
+    every { resolver.openFileDescriptor(uri, "r") } returns null
+
+    assertNull(renderPassFirstPage(context, uri))
+  }
+
+  @Test
+  fun renderPassFirstPage_fallsBackToPdf_whenImagePermissionIsRevoked() {
+    every { resolver.openInputStream(uri) } throws SecurityException("revoked")
+    every { resolver.openFileDescriptor(uri, "r") } throws SecurityException("revoked")
+
+    assertNull(renderPassFirstPage(context, uri))
   }
 
   private companion object {

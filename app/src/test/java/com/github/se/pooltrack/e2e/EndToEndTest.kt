@@ -37,7 +37,7 @@ import com.github.se.pooltrack.model.subscription.PdfFiles
 import com.github.se.pooltrack.model.subscription.Subscription
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryFirestore
 import com.github.se.pooltrack.model.subscription.SubscriptionRepositoryProvider
-import com.github.se.pooltrack.model.subscription.renderFirstPdfPage
+import com.github.se.pooltrack.model.subscription.renderPassFirstPage
 import com.github.se.pooltrack.model.subscription.toDocument
 import com.github.se.pooltrack.model.update.UpdateRepository
 import com.github.se.pooltrack.model.update.UpdateRepositoryProvider
@@ -114,7 +114,7 @@ abstract class EndToEndTest {
     // PdfRenderer is a native Android class that Robolectric cannot run: the renderer is the
     // boundary to the outside world here, and it "renders" a tiny bitmap.
     mockkStatic("com.github.se.pooltrack.model.subscription.PdfThumbnailKt")
-    every { renderFirstPdfPage(any(), any()) } answers
+    every { renderPassFirstPage(any(), any()) } answers
         {
           Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
         }

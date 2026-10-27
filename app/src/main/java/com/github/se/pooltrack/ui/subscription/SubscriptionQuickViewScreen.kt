@@ -184,7 +184,7 @@ private fun PassDisplayAndAccept(
                     ?: checkNotNull(LocalViewModelStoreOwner.current),
         ),
 ) {
-  val pageBitmap by rememberPdfFirstPage(uri)
+  val pageBitmap by rememberPassFirstPage(uri)
   val transform by zoomViewModel.transform.collectAsState()
   var viewport by remember { mutableStateOf(Size.Zero) }
   SideEffect { zoomViewModel.onPassShown(uri) }
