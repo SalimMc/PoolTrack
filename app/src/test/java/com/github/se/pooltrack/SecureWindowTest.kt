@@ -2,6 +2,8 @@ package com.github.se.pooltrack
 
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -57,5 +59,14 @@ class SecureWindowTest {
     composeRule.waitForIdle()
 
     assertEquals(true, isSecure)
+  }
+
+  @Test
+  fun secureWindow_doesNothing_withoutAnActivity() {
+    composeRule.setContent {
+      CompositionLocalProvider(LocalActivity provides null) { SecureWindow(secure = true) }
+    }
+
+    assertEquals(false, isSecure)
   }
 }
