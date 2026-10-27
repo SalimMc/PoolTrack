@@ -69,4 +69,25 @@ class SecureWindowTest {
 
     assertEquals(false, isSecure)
   }
+
+  @Test
+  fun secureWindow_securesOnlyReleaseBuilds_byDefault() {
+    composeRule.setContent { SecureWindow() }
+
+    assertEquals(!BuildConfig.DEBUG, isSecure)
+  }
+
+  @Test
+  fun secureWindow_staysSecure_whenTheParentRecomposesWithTheSameFlag() {
+    var tick by mutableStateOf(0)
+    composeRule.setContent {
+      tick
+      SecureWindow(secure = true)
+    }
+
+    tick++
+    composeRule.waitForIdle()
+
+    assertEquals(true, isSecure)
+  }
 }
