@@ -32,6 +32,7 @@ commit them with the change:
 ./gradlew resolveAndLockAll --write-locks
 ```
 
+On a Dependabot PR, run the same command on its branch and push the result.
 Review the lockfile diff like any other code. Never edit a lockfile by hand.
 
 ## Definition of done
