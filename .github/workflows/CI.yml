@@ -176,7 +176,13 @@ jobs:
         run: |
           ./gradlew coverageVerification
 
-      # The tests of the script below; Node is preinstalled on the runner.
+      # The coverage check below is a Node script; pin Node like the Firestore job does.
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The tests of that script.
       - name: Test the new-code coverage script
         run: |
           node --test scripts/diff-coverage.test.mjs
