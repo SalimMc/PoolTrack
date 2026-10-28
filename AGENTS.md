@@ -59,6 +59,9 @@ dl.google.com, so check any new `aapt2` version the same way.
 - **All new code comes with unit tests.**
 - `./gradlew check` is green (unit tests + lint) and `./gradlew ktfmtCheck` passes (formatting) before you submit.
 - Features covered by instrumented tests (under `androidTest/`) must also pass `./gradlew connectedDebugAndroidTest`, with an Android emulator running.
+- On a PR, CI also fails when fewer than 90% of the branches on the lines it adds or changes are
+  covered (`scripts/diff-coverage.mjs`, from the JaCoCo report). Add tests for the branches it
+  lists; do not exclude them.
 - CI (`.github/workflows/CI.yml`) runs all of the above on every PR, and must be green.
 
 ## How to work
