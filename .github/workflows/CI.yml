@@ -181,16 +181,6 @@ jobs:
         run: |
           node --test scripts/diff-coverage.test.mjs
 
-      # SonarCloud's gate on new code cannot be customised on the free plan, so this fails a pull
-      # request whose added or changed lines have less than 90% of their branches covered.
-      - name: Check new-code branch coverage
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          ./gradlew jacocoTestReport
-          node scripts/diff-coverage.mjs --base "origin/$BASE_REF"
-
       # Sends the code and the JaCoCo coverage to SonarCloud. Skipped without the token, which pull
       # requests from forks never get.
       - name: SonarCloud analysis
@@ -229,3 +219,15 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -skin 1080x2400
           disable-animations: true
           script: ./gradlew connectedCheck --parallel --build-cache
+
+      # SonarCloud's gate on new code cannot be customised on the free plan, so this fails a pull
+      # request whose added or changed lines have less than 90% of their branches covered. It runs
+      # last so a pull request under the threshold still gets its SonarCloud report and its
+      # instrumentation tests.
+      - name: Check new-code branch coverage
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          ./gradlew jacocoTestReport
+          node scripts/diff-coverage.mjs --base "origin/$BASE_REF"
