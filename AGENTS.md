@@ -36,11 +36,22 @@ On a Dependabot PR, run the same command on its branch and push the result.
 Review the lockfile diff like any other code. Never edit a lockfile by hand.
 
 Artifact checksums are pinned in `gradle/verification-metadata.xml`; a build fails on an artifact with
-no matching checksum. After a version bump, regenerate it together with the lockfiles:
+no matching checksum. Read the failure before acting:
+
+- A checksum that changed for a version already in the file means a tampered or republished
+  artifact. Investigate it; do not just regenerate.
+- A missing entry after a version bump is expected. Regenerate and commit
+  `gradle/verification-metadata.xml` together with the bump and the lockfiles:
 
 ```
-./gradlew --write-verification-metadata sha256 check jacocoTestReport ktfmtCheck assembleDebugAndroidTest
+./gradlew --write-verification-metadata sha256 check jacocoTestReport ktfmtCheck assembleDebugAndroidTest assembleRelease
 ```
+
+Run it with an empty Gradle cache (e.g. a fresh `GRADLE_USER_HOME`): a warm cache can lack the
+`.module` files CI downloads. The Sonar plugin classpath is resolved whenever the build is
+configured, so the command covers it. The `aapt2` jars for Linux and macOS are platform-specific
+and a Windows run does not see them; they were checked by hand against the `.sha256` files on
+dl.google.com, so check any new `aapt2` version the same way.
 
 ## Definition of done
 
