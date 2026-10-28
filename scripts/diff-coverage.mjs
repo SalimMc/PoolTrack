@@ -45,6 +45,12 @@ export function parseReport(xml) {
   const files = new Map()
   const packageRe = /<package name="([^"]*)">([\s\S]*?)<\/package>/g
   for (const pkg of xml.matchAll(packageRe)) {
+    // A class names its source file even when the file has no executable line (an interface), so
+    // such a file is known to the report, with no lines.
+    for (const cls of pkg[2].matchAll(/<class\b[^>]*\bsourcefilename="([^"]*)"/g)) {
+      const path = `${SOURCE_ROOT}${pkg[1]}/${cls[1]}`
+      if (!files.has(path)) files.set(path, new Map())
+    }
     const sourceRe = /<sourcefile name="([^"]*)">([\s\S]*?)<\/sourcefile>/g
     for (const source of pkg[2].matchAll(sourceRe)) {
       const lines = new Map()
@@ -62,14 +68,21 @@ export function parseReport(xml) {
   return files
 }
 
-/** Covered and total branches over the changed lines, and the lines that miss some. */
+/**
+ * Covered and total branches over the changed lines, the lines that miss some, and the changed
+ * Kotlin sources the report does not know (their branches would otherwise count for nothing).
+ */
 export function computeDiffCoverage(changed, report) {
   let covered = 0
   let total = 0
   const misses = []
+  const unreported = []
   for (const [path, changedLines] of changed) {
     const reported = report.get(path)
-    if (!reported) continue
+    if (!reported) {
+      if (path.startsWith(SOURCE_ROOT)) unreported.push(path)
+      continue
+    }
     const missing = []
     for (const nr of changedLines) {
       const counters = reported.get(nr)
@@ -81,17 +94,25 @@ export function computeDiffCoverage(changed, report) {
     }
     if (missing.length > 0) misses.push({ path, lines: missing })
   }
-  return { covered, total, percent: total === 0 ? 100 : (100 * covered) / total, misses }
+  const percent = total === 0 ? 100 : (100 * covered) / total
+  return { covered, total, percent, misses, unreported }
 }
 
 export function formatResult(result, threshold) {
   const out = []
-  if (result.total === 0) {
-    out.push("New code has no branches to cover: nothing to check.")
-    return { ok: true, text: out.join("\n") }
+  const unreported = result.unreported ?? []
+  if (unreported.length > 0) {
+    out.push("Changed Kotlin files missing from the coverage report:")
+    for (const path of unreported) out.push(`  ${path}`)
+    out.push("Their branches cannot be checked: the report paths no longer match the sources.")
   }
-  const percent = result.percent.toFixed(1)
-  const ok = result.percent >= threshold
+  if (result.total === 0) {
+    out.push("New code has no branches to cover.")
+    return { ok: unreported.length === 0, text: out.join("\n") }
+  }
+  // Rounded down, so a failing 89.996% is not shown as 90.00%.
+  const percent = (Math.floor(result.percent * 100 + 1e-9) / 100).toFixed(2)
+  const ok = result.percent >= threshold && unreported.length === 0
   out.push(`Branch coverage of new code: ${percent}% (${result.covered}/${result.total} branches).`)
   if (result.misses.length > 0) {
     out.push("Changed lines with uncovered branches:")
@@ -101,7 +122,9 @@ export function formatResult(result, threshold) {
       }
     }
   }
-  if (!ok) out.push(`Below the ${threshold}% required: add tests for the branches above.`)
+  if (result.percent < threshold) {
+    out.push(`Below the ${threshold}% required: add tests for the branches above.`)
+  }
   return { ok, text: out.join("\n") }
 }
 
@@ -120,34 +143,45 @@ export function parseArgs(argv) {
   return options
 }
 
-function main() {
-  const options = parseArgs(process.argv.slice(2))
-  const diff = execFileSync(
+/** The diff of the Kotlin files between the merge base with `base` and HEAD. */
+export function readDiff(base, cwd = process.cwd()) {
+  return execFileSync(
     "git",
-    ["-c", "core.quotepath=false", "diff", "-U0", "--no-color", `${options.base}...HEAD`, "--", "*.kt"],
-    { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+    ["-c", "core.quotepath=false", "diff", "-U0", "--no-color", `${base}...HEAD`, "--", "*.kt"],
+    { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
   )
-  const changed = parseChangedLines(diff)
-  const kotlinMain = [...changed.keys()].filter((path) => path.startsWith(SOURCE_ROOT))
-  if (kotlinMain.length === 0) {
-    console.log("No Kotlin source changes: nothing to check.")
+}
+
+/** Runs the check and returns the exit code; `io` is replaceable for tests. */
+export function run(argv, io = {}) {
+  const {
+    diff = readDiff,
+    exists = existsSync,
+    read = (path) => readFileSync(path, "utf8"),
+    log = console.log,
+    error = console.error,
+  } = io
+  const options = parseArgs(argv)
+  const changed = parseChangedLines(diff(options.base))
+  if (![...changed.keys()].some((path) => path.startsWith(SOURCE_ROOT))) {
+    log("No Kotlin source changes: nothing to check.")
     return 0
   }
-  if (!existsSync(options.report)) {
-    console.error(`Coverage report not found: ${options.report}. Run ./gradlew jacocoTestReport.`)
+  if (!exists(options.report)) {
+    error(`Coverage report not found: ${options.report}. Run ./gradlew jacocoTestReport.`)
     return 1
   }
-  const report = parseReport(readFileSync(options.report, "utf8"))
-  const { ok, text } = formatResult(computeDiffCoverage(changed, report), options.threshold)
-  console.log(text)
+  const result = computeDiffCoverage(changed, parseReport(read(options.report)))
+  const { ok, text } = formatResult(result, options.threshold)
+  log(text)
   return ok ? 0 : 1
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    process.exitCode = main()
-  } catch (error) {
-    console.error(error.message)
+    process.exitCode = run(process.argv.slice(2))
+  } catch (e) {
+    console.error(e.message)
     process.exitCode = 1
   }
 }
