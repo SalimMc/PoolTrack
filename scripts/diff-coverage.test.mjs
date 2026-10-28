@@ -1,4 +1,8 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { test } from "node:test"
 import {
   computeDiffCoverage,
@@ -6,6 +10,8 @@ import {
   parseArgs,
   parseChangedLines,
   parseReport,
+  readDiff,
+  run,
 } from "./diff-coverage.mjs"
 
 const DIFF = `diff --git a/app/src/main/java/com/x/A.kt b/app/src/main/java/com/x/A.kt
@@ -120,7 +126,7 @@ test("formatResult lists the lines that miss branches", () => {
   const result = computeDiffCoverage(parseChangedLines(DIFF), parseReport(REPORT))
   const { ok, text } = formatResult(result, 90)
   assert.equal(ok, false)
-  assert.match(text, /70\.0% \(7\/10 branches\)/)
+  assert.match(text, /70\.00% \(7\/10 branches\)/)
   assert.match(text, /A\.kt:21 \(2 of 2 branches missed\)/)
   assert.match(text, /Below the 90% required/)
 })
@@ -128,7 +134,7 @@ test("formatResult lists the lines that miss branches", () => {
 test("formatResult passes when there are no branches", () => {
   const { ok, text } = formatResult({ covered: 0, total: 0, percent: 100, misses: [] }, 90)
   assert.equal(ok, true)
-  assert.match(text, /nothing to check/)
+  assert.match(text, /no branches to cover/)
 })
 
 test("parseArgs reads the options and applies defaults", () => {
@@ -146,4 +152,172 @@ test("parseArgs rejects bad input", () => {
   assert.throws(() => parseArgs(["--base"]), /Missing value/)
   assert.throws(() => parseArgs(["--nope", "x"]), /Unknown option/)
   assert.throws(() => parseArgs(["--base", "b", "--threshold", "abc"]), /number/)
+})
+
+const A = "app/src/main/java/com/x/A.kt"
+
+test("parseChangedLines handles several files in one diff", () => {
+  const diff = `diff --git a/${A} b/${A}
+--- a/${A}
++++ b/${A}
+@@ -1,0 +2,2 @@
++a
++b
+diff --git a/app/src/main/java/com/y/B.kt b/app/src/main/java/com/y/B.kt
+--- a/app/src/main/java/com/y/B.kt
++++ b/app/src/main/java/com/y/B.kt
+@@ -5 +5 @@
+-a
++b
+`
+  const changed = parseChangedLines(diff)
+  assert.deepEqual(changed.get(A), [2, 3])
+  assert.deepEqual(changed.get("app/src/main/java/com/y/B.kt"), [5])
+})
+
+test("parseChangedLines follows a rename to its new path", () => {
+  const diff = `diff --git a/app/src/main/java/com/x/Old.kt b/${A}
+similarity index 80%
+rename from app/src/main/java/com/x/Old.kt
+rename to ${A}
+--- a/app/src/main/java/com/x/Old.kt
++++ b/${A}
+@@ -7 +7,2 @@
+-x
++y
++z
+`
+  const changed = parseChangedLines(diff)
+  assert.deepEqual([...changed.keys()], [A])
+  assert.deepEqual(changed.get(A), [7, 8])
+})
+
+test("parseChangedLines of a pure rename has no lines", () => {
+  const diff = `diff --git a/app/src/main/java/com/x/Old.kt b/${A}
+similarity index 100%
+rename from app/src/main/java/com/x/Old.kt
+rename to ${A}
+`
+  assert.equal(parseChangedLines(diff).size, 0)
+})
+
+// Counters as JaCoCo writes them: one line per branching source line.
+function reportWith(counters) {
+  const lines = counters
+    .map(([nr, mb, cb]) => `<line nr="${nr}" mi="0" ci="1" mb="${mb}" cb="${cb}"/>`)
+    .join("")
+  return `<package name="com/x"><sourcefile name="A.kt">${lines}</sourcefile></package>`
+}
+
+test("exactly 90.00% of the branches passes, just below fails", () => {
+  const changed = new Map([[A, [1, 2]]])
+  const exact = computeDiffCoverage(changed, parseReport(reportWith([[1, 0, 6], [2, 1, 3]])))
+  assert.equal(exact.covered, 9)
+  assert.equal(exact.total, 10)
+  assert.equal(exact.percent, 90)
+  const atThreshold = formatResult(exact, 90)
+  assert.equal(atThreshold.ok, true)
+  assert.match(atThreshold.text, /90\.00% \(9\/10 branches\)/)
+
+  const below = computeDiffCoverage(changed, parseReport(reportWith([[1, 2, 8], [2, 0, 9]])))
+  assert.equal(below.covered, 17)
+  assert.equal(below.total, 19)
+  assert.equal(formatResult(below, 90).ok, false)
+
+  const just = computeDiffCoverage(changed, parseReport(reportWith([[1, 1001, 8999], [2, 0, 0]])))
+  assert.ok(just.percent < 90 && just.percent > 89.98)
+  const shown = formatResult(just, 90)
+  assert.equal(shown.ok, false)
+  assert.match(shown.text, /89\.99% /)
+})
+
+test("a changed source missing from the report fails, even with no branches elsewhere", () => {
+  const changed = new Map([[A, [1]]])
+  const result = computeDiffCoverage(changed, parseReport(""))
+  assert.deepEqual(result.unreported, [A])
+  const { ok, text } = formatResult(result, 90)
+  assert.equal(ok, false)
+  assert.match(text, /missing from the coverage report/)
+  assert.match(text, /A\.kt/)
+})
+
+test("a changed source missing from the report fails even when the others pass", () => {
+  const changed = new Map([
+    [A, [1]],
+    ["app/src/main/java/com/x/Gone.kt", [1]],
+  ])
+  const result = computeDiffCoverage(changed, parseReport(reportWith([[1, 0, 2]])))
+  assert.equal(result.percent, 100)
+  assert.equal(formatResult(result, 90).ok, false)
+})
+
+test("a source in the report with no branches is fine", () => {
+  const xml = `<package name="com/x"><class name="com/x/A" sourcefilename="A.kt"></class></package>`
+  const result = computeDiffCoverage(new Map([[A, [1, 2]]]), parseReport(xml))
+  assert.deepEqual(result.unreported, [])
+  assert.equal(formatResult(result, 90).ok, true)
+})
+
+test("run passes without Kotlin changes, whatever the report", () => {
+  const out = []
+  const code = run(["--base", "main"], {
+    diff: () => "",
+    exists: () => false,
+    log: (m) => out.push(m),
+  })
+  assert.equal(code, 0)
+  assert.match(out[0], /No Kotlin source changes/)
+})
+
+test("run fails when the report is missing", () => {
+  const errors = []
+  const code = run(["--base", "main"], {
+    diff: () => DIFF,
+    exists: () => false,
+    error: (m) => errors.push(m),
+  })
+  assert.equal(code, 1)
+  assert.match(errors[0], /Coverage report not found/)
+})
+
+test("run returns 1 under the threshold and 0 at it", () => {
+  const io = (xml) => ({ diff: () => DIFF, exists: () => true, read: () => xml, log: () => {} })
+  assert.equal(run(["--base", "main"], io(REPORT)), 1)
+  assert.equal(run(["--base", "main", "--threshold", "70"], io(REPORT)), 0)
+})
+
+test("run passes the base to the diff", () => {
+  let seen = null
+  run(["--base", "origin/main"], {
+    diff: (base) => ((seen = base), ""),
+    log: () => {},
+  })
+  assert.equal(seen, "origin/main")
+})
+
+test("readDiff returns the added Kotlin lines against the merge base", () => {
+  const dir = mkdtempSync(join(tmpdir(), "diff-coverage-"))
+  try {
+    const git = (...args) =>
+      execFileSync(
+        "git",
+        ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args],
+        { cwd: dir, stdio: "pipe" },
+      )
+    git("init", "-q", "-b", "main")
+    mkdirSync(join(dir, "app/src/main/java/com/x"), { recursive: true })
+    writeFileSync(join(dir, A), "one\n")
+    writeFileSync(join(dir, "notes.md"), "one\n")
+    git("add", ".")
+    git("commit", "-q", "-m", "base")
+    git("checkout", "-q", "-b", "feature")
+    writeFileSync(join(dir, A), "one\ntwo\n")
+    writeFileSync(join(dir, "notes.md"), "one\ntwo\n")
+    git("commit", "-q", "-am", "change")
+    const changed = parseChangedLines(readDiff("main", dir))
+    assert.deepEqual([...changed.keys()], [A])
+    assert.deepEqual(changed.get(A), [2])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
