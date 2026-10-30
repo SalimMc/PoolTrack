@@ -1,6 +1,8 @@
 package com.github.se.pooltrack.ui.home
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasAnyDescendant
@@ -166,6 +168,49 @@ class HomeScreenTest {
   }
 
   // region weekly chart legend
+
+  @Test
+  fun homeScreen_splitsItsCardsIntoSections_andLabelsTheLastSwim() {
+    setContent()
+
+    composeRule.onNodeWithText("ACTIVITY").assertExists()
+    composeRule.onNodeWithText("SPENDING").assertExists()
+    composeRule.onNodeWithText("LAST SWIM").assertIsDisplayed()
+  }
+
+  @Test
+  fun homeScreen_showsAFloatPerEntry_forAnEntryLimitedPass() {
+    setContent(subscriptionRepository = activeSubscriptionRepo(pass(maxEntries = 10)))
+
+    composeRule
+        .onNodeWithTag(HomeScreenTestTags.PASS_ENTRY_FLOATS, useUnmergedTree = true)
+        .assertExists()
+  }
+
+  @Test
+  fun homeScreen_showsNoFloats_forADatedPass() {
+    val dated = pass(expiresAt = Instant.now().plus(Duration.ofDays(30)), maxEntries = 10)
+    setContent(subscriptionRepository = activeSubscriptionRepo(dated))
+
+    composeRule.onNodeWithTag(HomeScreenTestTags.EXPIRATION_BANNER).assertIsDisplayed()
+    composeRule
+        .onNodeWithTag(HomeScreenTestTags.PASS_ENTRY_FLOATS, useUnmergedTree = true)
+        .assertDoesNotExist()
+  }
+
+  @Test
+  fun barBrush_isSolidAtTheTop_onlyForTheHighlightedBar() {
+    val color = Color(0xFF00668A)
+
+    assertEquals(
+        Brush.verticalGradient(listOf(color, color.copy(alpha = 0.6f))),
+        barBrush(color, highlighted = true),
+    )
+    assertEquals(
+        Brush.verticalGradient(listOf(color.copy(alpha = 0.45f), color.copy(alpha = 0.27f))),
+        barBrush(color, highlighted = false),
+    )
+  }
 
   @Test
   fun weeklyChart_showsNoLegend_untilABarIsTapped() {

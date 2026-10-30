@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -51,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLocale
@@ -72,6 +72,13 @@ import com.github.se.pooltrack.ui.navigation.Tab
 import com.github.se.pooltrack.ui.navigation.TopNavigationMenu
 import com.github.se.pooltrack.ui.subscription.formatCooldown
 import com.github.se.pooltrack.ui.subscription.rememberRemainingCooldown
+import com.github.se.pooltrack.ui.theme.DEPTH_MARKER_GUTTER
+import com.github.se.pooltrack.ui.theme.EntryFloats
+import com.github.se.pooltrack.ui.theme.WaterColumnShape
+import com.github.se.pooltrack.ui.theme.WaterLevel
+import com.github.se.pooltrack.ui.theme.poolCaustics
+import com.github.se.pooltrack.ui.theme.poolDepthMarkers
+import com.github.se.pooltrack.ui.theme.poolFloorLines
 import java.time.LocalDate
 import java.time.Period
 import java.time.ZoneId
@@ -88,6 +95,7 @@ object HomeScreenTestTags {
   const val AVERAGE_PER_WEEK_STAT = "HomeScreenAveragePerWeekStat"
   const val FAVORITE_DAY_BANNER = "HomeScreenFavoriteDayBanner"
   const val EXPIRATION_BANNER = "HomeScreenExpirationBanner"
+  const val PASS_ENTRY_FLOATS = "HomeScreenPassEntryFloats"
   const val NO_SUBSCRIPTION_TODO = "HomeScreenNoSubscriptionTodo"
   const val TOTAL_SPENT_STAT = "HomeScreenTotalSpentStat"
   const val COST_PER_ENTRY_STAT = "HomeScreenCostPerEntryStat"
@@ -168,9 +176,12 @@ fun HomeScreen(
             Modifier.fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                // The page is the pool's wall: depth markers run down its end edge.
+                .poolDepthMarkers()
+                .padding(start = 16.dp, top = 16.dp, end = DEPTH_MARKER_GUTTER, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+      SectionLabel("LAST SWIM")
       LastSwimHero(
           daysSinceLastSwim = stats.daysSinceLastSwim,
           modifier = Modifier.testTag(HomeScreenTestTags.LAST_SWIM_HERO),
@@ -190,6 +201,7 @@ fun HomeScreen(
         )
       }
 
+      SectionLabel("ACTIVITY")
       Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         StatTile(
             icon = Icons.Outlined.DateRange,
@@ -249,6 +261,7 @@ fun HomeScreen(
           weekStarts = stats.weekStarts,
           modifier = Modifier.testTag(HomeScreenTestTags.WEEKLY_CHART),
       )
+      SectionLabel("SPENDING")
       Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         StatTile(
             icon = Icons.Outlined.ShoppingCart,
@@ -294,6 +307,17 @@ fun HomeScreen(
   }
 }
 
+/** A small capitalized heading splitting Home into its sections. */
+@Composable
+private fun SectionLabel(text: String) {
+  Text(
+      text = text,
+      style = MaterialTheme.typography.labelSmall,
+      color = MaterialTheme.colorScheme.primary,
+      modifier = Modifier.padding(top = 4.dp),
+  )
+}
+
 @Composable
 private fun LastSwimHero(daysSinceLastSwim: Long?, modifier: Modifier = Modifier) {
   Card(
@@ -304,8 +328,14 @@ private fun LastSwimHero(daysSinceLastSwim: Long?, modifier: Modifier = Modifier
               contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
           ),
   ) {
+    // Seen from above: the floor's lane lines and light reflections through the water.
+    val water = MaterialTheme.colorScheme.onPrimaryContainer
     Column(
-        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        modifier =
+            Modifier.fillMaxWidth()
+                .poolFloorLines(water.copy(alpha = 0.06f))
+                .poolCaustics(water.copy(alpha = 0.10f))
+                .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
       Text(
@@ -331,7 +361,11 @@ private fun lastSwimValueLabel(daysSinceLastSwim: Long?): String =
       else -> "$daysSinceLastSwim days"
     }
 
-/** Draws attention to the active subscription's expiration, in red once it's urgent or past. */
+/**
+ * Draws attention to the active subscription's expiration, in red once it's urgent or past. The
+ * card is a pool whose water drains as the pass is used up (see [passWaterLevel]); a pass limited
+ * only by entries also shows them as the floats of a lane rope.
+ */
 @Composable
 private fun ExpirationBanner(
     subscription: Subscription,
@@ -363,25 +397,42 @@ private fun ExpirationBanner(
   val onBadgeColor =
       if (isUrgent) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onTertiary
 
+  val maxEntries = subscription.maxEntries
+
   Card(
       modifier = modifier.fillMaxWidth(),
       colors =
           CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
   ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-      IconBadge(
-          icon = if (isUrgent) Icons.Filled.Lock else Icons.Outlined.Notifications,
-          containerColor = badgeColor,
-          contentColor = onBadgeColor,
+    Box {
+      WaterLevel(
+          level = passWaterLevel(subscription, usedCount),
+          color = badgeColor.copy(alpha = 0.14f),
+          modifier = Modifier.matchParentSize(),
       )
-      Text(
-          text = message,
-          style = MaterialTheme.typography.bodyMedium,
-          modifier = Modifier.padding(start = 12.dp),
-      )
+      Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconBadge(
+              icon = if (isUrgent) Icons.Filled.Lock else Icons.Outlined.Notifications,
+              containerColor = badgeColor,
+              contentColor = onBadgeColor,
+          )
+          Text(
+              text = message,
+              style = MaterialTheme.typography.bodyMedium,
+              modifier = Modifier.padding(start = 12.dp),
+          )
+        }
+        if (subscription.expiresAt == null && maxEntries != null) {
+          EntryFloats(
+              usedCount = usedCount,
+              maxEntries = maxEntries,
+              color = badgeColor,
+              modifier =
+                  Modifier.padding(top = 12.dp).testTag(HomeScreenTestTags.PASS_ENTRY_FLOATS),
+          )
+        }
+      }
     }
   }
 }
@@ -529,10 +580,12 @@ private fun WeeklyChartCard(
                 modifier =
                     Modifier.fillMaxWidth()
                         .fillMaxHeight(0.8f * count / maxCount)
-                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                        .clip(WaterColumnShape())
                         .background(
-                            if (isCurrent || index == selected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            barBrush(
+                                MaterialTheme.colorScheme.primary,
+                                highlighted = isCurrent || index == selected,
+                            )
                         )
             )
             Box(
@@ -556,6 +609,14 @@ private fun WeeklyChartCard(
     }
   }
 }
+
+/**
+ * The water in a weekly bar: deeper at the top, clearer towards the bottom. A [highlighted] bar
+ * (this week, or the one tapped) is solid at the top, the others are paler.
+ */
+internal fun barBrush(color: Color, highlighted: Boolean): Brush =
+    if (highlighted) Brush.verticalGradient(listOf(color, color.copy(alpha = 0.6f)))
+    else Brush.verticalGradient(listOf(color.copy(alpha = 0.45f), color.copy(alpha = 0.27f)))
 
 /** "12 Oct - 18 Oct: 3 entries" for the week starting on [weekStart] (a Monday). */
 internal fun weekLegend(
