@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -53,8 +53,9 @@ object MonthCalendarTestTags {
 
 /**
  * A month calendar in the spirit of the iPhone's: a title with previous/next buttons, a row of
- * weekday initials and a grid of round days that fills the width. Days with entries are filled,
- * darker for more entries. Swipe sideways or use the buttons to change month.
+ * weekday initials and a grid of days that fills the width, laid like the tiles of a pool. Days
+ * with entries are filled, deeper blue for more entries. Swipe sideways or use the buttons to
+ * change month.
  *
  * @param months The months that can be shown, oldest first; it opens on the last one.
  * @param countsByDay Entries per day, see [entryCountsByDay].
@@ -169,7 +170,14 @@ fun MonthCalendar(
           remember(months[page], countsByDay, today, firstDayOfWeek, maxCount) {
             buildMonthGrid(months[page], countsByDay, today, firstDayOfWeek, maxCount)
           }
-      Column(modifier = Modifier.fillMaxWidth()) {
+      // The light lines between the tiles, like the grout of a pool floor.
+      Column(
+          modifier =
+              Modifier.fillMaxWidth()
+                  .padding(top = 4.dp)
+                  .background(groutColor(), RoundedCornerShape(10.dp))
+                  .padding(3.dp),
+      ) {
         grid.weeks.forEach { week ->
           Row(modifier = Modifier.fillMaxWidth()) {
             (0 until 7).forEach { column ->
@@ -221,8 +229,12 @@ internal fun DayCell(
       modifier =
           Modifier.fillMaxWidth()
               .aspectRatio(1f)
-              .background(heatmapColor(day.level), CircleShape)
-              .then(if (ring != null) Modifier.border(ring, CircleShape) else Modifier)
+              .background(
+                  if (day.level == 0 && !day.isFuture) emptyTileColor()
+                  else heatmapColor(day.level),
+                  PoolTileShape,
+              )
+              .then(if (ring != null) Modifier.border(ring, PoolTileShape) else Modifier)
               .then(if (day.isFuture) Modifier else Modifier.clickable(onClick = onClick))
               .semantics { contentDescription = description }
               .testTag(testTag),

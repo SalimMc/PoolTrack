@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +41,16 @@ fun heatmapColor(level: Int, palette: HeatmapPalette = DayPalette): Color =
     if (level <= 0) Color.Transparent
     else MaterialTheme.colorScheme.primary.copy(alpha = levelAlpha(level, palette))
 
-/** The "Less, five dots, More" key explaining the colors. */
+/** The shape of a day in the calendars: a pool tile with softened corners. */
+val PoolTileShape = RoundedCornerShape(6.dp)
+
+/** A day without entries: a bare tile, barely there, so the month still reads as a tiled floor. */
+@Composable fun emptyTileColor(): Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+
+/** The lines between the tiles of a calendar, like the grout between a pool's tiles. */
+@Composable fun groutColor(): Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+
+/** The "Less, five tiles, More" key explaining the colors. */
 @Composable
 fun HeatmapLegend(modifier: Modifier = Modifier) {
   Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -56,9 +65,8 @@ fun HeatmapLegend(modifier: Modifier = Modifier) {
               Modifier.padding(start = 4.dp)
                   .size(12.dp)
                   .background(
-                      if (level == 0) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                      else heatmapColor(level),
-                      CircleShape,
+                      if (level == 0) emptyTileColor() else heatmapColor(level),
+                      RoundedCornerShape(3.dp),
                   )
       )
     }
