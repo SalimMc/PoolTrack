@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -104,6 +105,55 @@ class PoolStayScreenTest {
         listOf(waiting.copy(swimDistanceMeters = 1200, awaitingDistance = false)),
         repository.storedEntries,
     )
+  }
+
+  @Test
+  fun poolStayScreen_lengthCounter_fillsTheDistanceInMetres() {
+    show(FakeEntryRepository(listOf(waiting)), minutesAfterEntry = 30)
+
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_COUNT).assertTextEquals("0")
+    repeat(3) { composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_PLUS).performClick() }
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_MINUS).performClick()
+
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_COUNT).assertTextEquals("2")
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.DISTANCE_INPUT).assertTextContains("50")
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.SAVE_BUTTON).assertIsEnabled()
+  }
+
+  @Test
+  fun poolStayScreen_switchingTo50mPool_keepsTheLengths_andSavesTheirMetres() {
+    val repository = FakeEntryRepository(listOf(waiting))
+    show(repository, minutesAfterEntry = 30)
+
+    repeat(4) { composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_PLUS).performClick() }
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.poolLength(50)).performClick()
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_COUNT).assertTextEquals("4")
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.SAVE_BUTTON).performClick()
+
+    assertEquals(
+        listOf(waiting.copy(swimDistanceMeters = 200, awaitingDistance = false)),
+        repository.storedEntries,
+    )
+  }
+
+  @Test
+  fun poolStayScreen_lengthCounter_showsADash_forMetresThatAreNotWholeLengths() {
+    show(FakeEntryRepository(listOf(waiting)), minutesAfterEntry = 30)
+
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.DISTANCE_INPUT).performTextInput("1210")
+
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_COUNT).assertTextEquals("–")
+  }
+
+  @Test
+  fun poolStayScreen_lengthCounter_clearsTheDistance_whenBackToZero() {
+    show(FakeEntryRepository(listOf(waiting)), minutesAfterEntry = 30)
+
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_PLUS).performClick()
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_MINUS).performClick()
+
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.LENGTHS_COUNT).assertTextEquals("0")
+    composeTestRule.onNodeWithTag(PoolStayScreenTestTags.SAVE_BUTTON).assertIsNotEnabled()
   }
 
   @Test
