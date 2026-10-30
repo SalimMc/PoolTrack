@@ -44,3 +44,40 @@ fun remainingCancelWindow(entry: Entry, now: Instant): Duration? {
  */
 fun isLogReminderDue(entry: Entry?, now: Instant): Boolean =
     entry != null && entry.awaitingDistance && remainingCancelWindow(entry, now) == null
+
+/** The pool lengths, in metres, the user can count their lengths in. */
+val POOL_LENGTHS_METERS = listOf(25, 50)
+
+/**
+ * How many whole lengths of a [poolLengthMeters] pool make [meters], or `null` if they don't add up
+ * to a whole number of lengths (or nothing was swum).
+ */
+fun metersToLengths(meters: Int?, poolLengthMeters: Int): Int? =
+    if (meters == null || meters <= 0 || poolLengthMeters <= 0 || meters % poolLengthMeters != 0)
+        null
+    else meters / poolLengthMeters
+
+/**
+ * The distance after adding [delta] lengths of a [poolLengthMeters] pool to [meters] (`null` for
+ * nothing yet). A distance that is not a whole number of lengths is rounded down to one first, and
+ * the result stays between 0 and the longest [MAX_SWIM_DISTANCE_METERS] that fits in whole lengths.
+ */
+fun stepLengths(meters: Int?, poolLengthMeters: Int, delta: Int): Int {
+  require(poolLengthMeters > 0) { "poolLengthMeters must be positive" }
+  val lengths = (meters ?: 0).coerceAtLeast(0) / poolLengthMeters
+  val maxLengths = MAX_SWIM_DISTANCE_METERS / poolLengthMeters
+  return (lengths + delta).coerceIn(0, maxLengths) * poolLengthMeters
+}
+
+/**
+ * The distance once the user says the pool is [toPoolLength] metres long instead of
+ * [fromPoolLength]: the same number of lengths, now of the new pool. A distance that is not a whole
+ * number of lengths was typed in metres and is kept as it is, as is one that would go past
+ * [MAX_SWIM_DISTANCE_METERS].
+ */
+fun changePoolLength(meters: Int?, fromPoolLength: Int, toPoolLength: Int): Int? {
+  val lengths = metersToLengths(meters, fromPoolLength) ?: return meters
+  val converted = lengths.toLong() * toPoolLength
+  return if (toPoolLength <= 0 || converted > MAX_SWIM_DISTANCE_METERS) meters
+  else converted.toInt()
+}
