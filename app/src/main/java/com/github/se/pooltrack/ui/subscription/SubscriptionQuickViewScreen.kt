@@ -9,13 +9,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
@@ -25,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,6 +54,7 @@ import com.github.se.pooltrack.SecureWindow
 import com.github.se.pooltrack.ui.navigation.NavigationActions
 import com.github.se.pooltrack.ui.navigation.Screen
 import com.github.se.pooltrack.ui.navigation.TopNavigationMenu
+import com.github.se.pooltrack.ui.theme.Ripples
 import java.time.Duration
 
 object SubscriptionQuickViewScreenTestTags {
@@ -60,6 +62,7 @@ object SubscriptionQuickViewScreenTestTags {
   const val PDF_IMAGE = "SubscriptionQuickViewScreenPdfImage"
   const val ACCEPT_BUTTON = "SubscriptionQuickViewScreenAcceptButton"
   const val COOLDOWN_MESSAGE = "SubscriptionQuickViewScreenCooldownMessage"
+  const val CONFIRM_SHEET = "SubscriptionQuickViewScreenConfirmSheet"
 }
 
 /**
@@ -245,14 +248,47 @@ private fun PassDisplayAndAccept(
     // A scan the scanner declines must not count as an entry. There's no dedicated
     // "Declined" control for that: simply not tapping Accepted already leaves nothing
     // recorded, and the pass stays up for the user to try scanning again.
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        horizontalArrangement = Arrangement.Center,
+    ConfirmScanSheet(onAccepted = onAccepted)
+  }
+}
+
+/**
+ * The bottom sheet under the pass asking whether the gate let the user in: ripples on the water,
+ * the question, how a declined scan is handled, and the Accepted button.
+ */
+@Composable
+private fun ConfirmScanSheet(onAccepted: () -> Unit) {
+  Surface(
+      color = MaterialTheme.colorScheme.surfaceContainerHigh,
+      shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+      modifier = Modifier.fillMaxWidth().testTag(SubscriptionQuickViewScreenTestTags.CONFIRM_SHEET),
+  ) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+      Ripples(
+          color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(56.dp),
+          spread = true,
+      )
+      Text(
+          text = "Did the gate let you in?",
+          style = MaterialTheme.typography.titleMedium,
+          modifier = Modifier.padding(top = 8.dp),
+      )
+      Text(
+          text = "Declined? Keep the pass up and scan again.",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          textAlign = TextAlign.Center,
+          modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
+      )
       Button(
           onClick = onAccepted,
           contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-          modifier = Modifier.testTag(SubscriptionQuickViewScreenTestTags.ACCEPT_BUTTON),
+          modifier =
+              Modifier.fillMaxWidth().testTag(SubscriptionQuickViewScreenTestTags.ACCEPT_BUTTON),
       ) {
         Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(8.dp))
